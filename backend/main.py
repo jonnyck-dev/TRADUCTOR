@@ -50,6 +50,17 @@ def download_and_extract(url: str, output_dir: str) -> tuple[str, str]:
         cached_audio = os.path.join(source_dir, "audio.wav")
         if os.path.exists(cached_video) and os.path.exists(cached_audio):
             print(f"Skipping download, using cached files from {source_dir}")
+            # Copy cached translations if available to skip those phases
+            import shutil
+            for filename in ["english_whisper.json", "spanish_translated.json"]:
+                src = os.path.join(source_dir, filename)
+                dst = os.path.join(output_dir, filename)
+                if os.path.exists(src) and not os.path.exists(dst):
+                    try:
+                        shutil.copy(src, dst)
+                        print(f"Cached {filename} copied to new task directory.")
+                    except Exception as e:
+                        print(f"Failed to copy cached {filename}: {e}")
             return cached_video, cached_audio
         else:
             raise FileNotFoundError(f"Cached files not found in {source_dir}")
@@ -106,20 +117,30 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str):
         tasks[task_id]["status"] = "transcribing"
         tasks[task_id]["progress"] = 35
         orig_json_path = os.path.join(output_dir, "english_whisper.json")
-        orig_data = transcribe_audio(audio_path, orig_json_path, language="English")
+        if os.path.exists(orig_json_path):
+            print(f"Skipping transcription, using cached: {orig_json_path}")
+            with open(orig_json_path, 'r', encoding='utf-8') as f:
+                orig_data = json.load(f)
+        else:
+            orig_data = transcribe_audio(audio_path, orig_json_path, language="English")
         
         # 3. Translate JSON to Spanish using Ollama
         tasks[task_id]["status"] = "translating"
         tasks[task_id]["progress"] = 55
-        translated_chunks = translate_chunks(orig_data.get("chunks", []), model=model)
-        translated_data = {
-            "text": " ".join([c.get("text", "") for c in translated_chunks]),
-            "chunks": translated_chunks
-        }
-        
         translated_json_path = os.path.join(output_dir, "spanish_translated.json")
-        with open(translated_json_path, "w", encoding="utf-8") as f:
-            json.dump(translated_data, f, ensure_ascii=False, indent=2)
+        if os.path.exists(translated_json_path):
+            print(f"Skipping translation, using cached: {translated_json_path}")
+            with open(translated_json_path, 'r', encoding='utf-8') as f:
+                translated_data = json.load(f)
+            translated_chunks = translated_data.get("chunks", [])
+        else:
+            translated_chunks = translate_chunks(orig_data.get("chunks", []), model=model)
+            translated_data = {
+                "text": " ".join([c.get("text", "") for c in translated_chunks]),
+                "chunks": translated_chunks
+            }
+            with open(translated_json_path, "w", encoding="utf-8") as f:
+                json.dump(translated_data, f, ensure_ascii=False, indent=2)
             
         # 4. Generate continuous Spanish TTS using VibeVoice
         tasks[task_id]["status"] = "synthesizing"
