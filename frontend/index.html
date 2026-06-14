@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Video Dubber & Translator</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="glass-bg"></div>
+    <div class="app-container">
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <header class="app-header">
+                <div class="logo">
+                    <i class="fa-solid fa-wand-magic-sparkles purple-glow"></i>
+                    <h1>AI Dubber</h1>
+                    <span class="badge">v1.0</span>
+                </div>
+                <div class="status-indicator" id="global-status">
+                    <span class="dot"></span> Listo para doblar
+                </div>
+            </header>
+
+            <div class="player-wrapper">
+                <!-- Start Overlay Panel -->
+                <div id="start-overlay" class="overlay-panel">
+                    <div class="overlay-content">
+                        <h2>Traducir y Doblar Video</h2>
+                        <p>Ingresa una URL de YouTube para comenzar el doblaje de voz con IA</p>
+                        
+                        <div class="url-input-container">
+                            <i class="fa-brands fa-youtube icon"></i>
+                            <input type="text" id="youtube-url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off">
+                            <button id="btn-process" class="glow-button">
+                                <span>Comenzar</span> <i class="fa-solid fa-arrow-right"></i>
+                            </button>
+                        </div>
+
+                        <!-- Modo Desarrollo: Usar Caché -->
+                        <div class="dev-cache-panel">
+                            <label class="dev-checkbox-label">
+                                <input type="checkbox" id="chk-use-cache">
+                                <span><i class="fa-solid fa-bug text-purple"></i> Simular con Caché Local</span>
+                            </label>
+                            <div id="cache-select-wrapper" class="select-wrapper dev-select-wrapper hidden">
+                                <select id="select-cache">
+                                    <option value="">(Cargando cachés...)</option>
+                                </select>
+                                <i class="fa-solid fa-chevron-down dropdown-icon"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Processing Overlay (Visible during tasks) -->
+                <div id="processing-overlay" class="overlay-panel hidden">
+                    <div class="overlay-content">
+                        <div class="spinner-container">
+                            <div class="spinner"></div>
+                            <div class="spinner-glow"></div>
+                        </div>
+                        <h2 id="process-title">Procesando Video...</h2>
+                        <p id="process-description">Descargando medios desde YouTube...</p>
+                        
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
+                        </div>
+                        <span class="progress-text" id="progress-text">0%</span>
+                    </div>
+                </div>
+
+                <!-- HTML5 Native Video Player -->
+                <video id="video-player" controls class="hidden"></video>
+            </div>
+
+            <!-- Subtitles Scrolling Panel -->
+            <div class="subtitles-container">
+                <div class="panel-header">
+                    <h3><i class="fa-solid fa-closed-captioning"></i> Transcripción y Traducción Sincronizada</h3>
+                    <div class="sub-toggle-buttons">
+                        <button id="btn-show-original" class="active">Inglés</button>
+                        <button id="btn-show-translated" class="active">Español</button>
+                    </div>
+                </div>
+                <div class="subtitles-viewport" id="subtitles-viewport">
+                    <p class="empty-subs-msg">Las subtítulos aparecerán aquí una vez procesado el video.</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- Sidebar Actions & Settings -->
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <h3><i class="fa-solid fa-gears text-purple"></i> Parámetros de IA</h3>
+                
+                <div class="control-group">
+                    <label for="select-model">Modelo de Traducción (Ollama)</label>
+                    <div class="select-wrapper">
+                        <select id="select-model">
+                            <option value="gemma4:e2b-it-qat">(Recomendado) gemma4:e2b-it-qat (4B)</option>
+                            <option value="qwen3.5:2b">qwen3.5:2b (2B)</option>
+                            <option value="qwen3.5:0.8b">qwen3.5:0.8b (0.8B)</option>
+                            <option value="SetneufPT/Qwopus3.5-4B-Coder-MTP_Q4_64k_8GB-GPU:latest">Qwopus 3.5 4B</option>
+                            <option value="gemma4:12b-it-qat">gemma4:12b-it-qat (12B)</option>
+                        </select>
+                        <i class="fa-solid fa-chevron-down dropdown-icon"></i>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label for="select-speaker">Voz de Doblaje (VibeVoice)</label>
+                    <div class="select-wrapper">
+                        <select id="select-speaker">
+                            <option value="en-Frank_man">(Hombre) Frank</option>
+                            <option value="en-Carter_man">(Hombre) Carter</option>
+                            <option value="en-Davis_man">(Hombre) Davis</option>
+                            <option value="en-Grace_woman">(Mujer) Grace</option>
+                            <option value="en-Emma_woman">(Mujer) Emma</option>
+                        </select>
+                        <i class="fa-solid fa-chevron-down dropdown-icon"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section info-section">
+                <h3><i class="fa-solid fa-circle-info text-teal"></i> ¿Cómo funciona?</h3>
+                <ol class="workflow-steps">
+                    <li>
+                        <div class="step-num">1</div>
+                        <p><strong>Descarga:</strong> El servidor descarga el video original en su caché local.</p>
+                    </li>
+                    <li>
+                        <div class="step-num">2</div>
+                        <p><strong>Transcripción:</strong> <code>insanely-fast-whisper</code> genera los tiempos de voz.</p>
+                    </li>
+                    <li>
+                        <div class="step-num">3</div>
+                        <p><strong>Traducción:</strong> El modelo local de Ollama traduce el contenido manteniendo el JSON.</p>
+                    </li>
+                    <li>
+                        <div class="step-num">4</div>
+                        <p><strong>Doblaje:</strong> VibeVoice sintetiza las voces y un pipeline las sincroniza y mezcla.</p>
+                    </li>
+                </ol>
+            </div>
+
+            <footer class="sidebar-footer">
+                <p>Desarrollado para Joan en Localhost</p>
+                <div class="links">
+                    <a href="https://github.com/tonhowtf/omniget" target="_blank"><i class="fa-brands fa-github"></i> Omniget</a>
+                </div>
+            </footer>
+        </aside>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
