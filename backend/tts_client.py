@@ -33,7 +33,7 @@ def generate_tts(chunks: list, output_dir: str, speaker_name: str = "en-Frank_ma
     # Command to run VibeVoice inference
     if os.name == 'nt':
         python_exe = os.path.join(vibevoice_dir, "env_vibevoice", "Scripts", "python.exe")
-        model_path = os.path.join(vibevoice_dir, "checkpoints", "VibeVoice-Realtime-0.5B")
+        model_path = os.path.join(vibevoice_dir, "checkpoints", "VibeVoice-1.5B")
         
         cmd = (
             f'"{python_exe}" '
@@ -46,7 +46,7 @@ def generate_tts(chunks: list, output_dir: str, speaker_name: str = "en-Frank_ma
         cmd = (
             f'cmd.exe /c "C:\\users\\jpzam\\Vibevoice\\env_vibevoice\\Scripts\\activate.bat && '
             f'cd /d C:\\Users\\jpzam\\VibeVoice && '
-            f'python demo/inference_from_file.py --model_path \\"C:\\Users\\jpzam\\VibeVoice\\checkpoints\\VibeVoice-Realtime-0.5B\\" '
+            f'python demo/inference_from_file.py --model_path \\"C:\\Users\\jpzam\\VibeVoice\\checkpoints\\VibeVoice-1.5B\\" '
             f'--speaker_names \\"{speaker_name}\\" --device cuda --txt_path \\"{win_txt_path}\\" '
             f'--output_dir \\"{win_output_dir}\\"" < /dev/null'
         )
