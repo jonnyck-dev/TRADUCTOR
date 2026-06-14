@@ -73,6 +73,13 @@ def align_transcripts(original_chunks: list, dubbed_chunks: list, total_dub_dura
     # Sequential matching pointer
     dub_ptr = 0
     
+    # Calculate total original duration for fallback ratio
+    total_orig_duration = 0.0
+    if original_chunks:
+        total_orig_duration = original_chunks[-1].get("timestamp", [0, 0])[1]
+    if total_orig_duration == 0:
+        total_orig_duration = 1.0
+        
     for chunk in original_chunks:
         ts = chunk.get("timestamp")
         text = chunk.get("text", "")
@@ -109,24 +116,33 @@ def align_transcripts(original_chunks: list, dubbed_chunks: list, total_dub_dura
         match_start_time = None
         match_end_time = None
         
-        # Simple sliding window search for the best word block match
-        best_dub_start_idx = dub_ptr
-        # We scan a small window forward to find the first matching word
-        for offset in range(min(10, len(dubbed_words) - dub_ptr)):
-            candidate_idx = dub_ptr + offset
-            if dubbed_words[candidate_idx]["word"] == chunk_words[0]:
-                best_dub_start_idx = candidate_idx
-                break
+        if dub_ptr >= len(dubbed_words):
+            # Proportional mapping fallback when we run out of dubbed words
+            ratio = total_dub_duration / total_orig_duration
+            match_start_time = orig_start * ratio
+            match_end_time = orig_end * ratio
+        else:
+            # Simple sliding window search for the best word block match
+            best_dub_start_idx = dub_ptr
+            # We scan a small window forward to find the first matching word
+            for offset in range(min(10, len(dubbed_words) - dub_ptr)):
+                candidate_idx = dub_ptr + offset
+                if dubbed_words[candidate_idx]["word"] == chunk_words[0]:
+                    best_dub_start_idx = candidate_idx
+                    break
+                    
+            if best_dub_start_idx >= len(dubbed_words):
+                best_dub_start_idx = len(dubbed_words) - 1
                 
-        # Set start timestamp
-        match_start_time = dubbed_words[best_dub_start_idx]["start"]
-        
-        # Advance pointer to end of this segment
-        target_end_idx = min(best_dub_start_idx + len(chunk_words) - 1, len(dubbed_words) - 1)
-        match_end_time = dubbed_words[target_end_idx]["end"]
-        
-        # Update the pointer for next iterations
-        dub_ptr = target_end_idx + 1
+            # Set start timestamp
+            match_start_time = dubbed_words[best_dub_start_idx]["start"]
+            
+            # Advance pointer to end of this segment
+            target_end_idx = min(best_dub_start_idx + len(chunk_words) - 1, len(dubbed_words) - 1)
+            match_end_time = dubbed_words[target_end_idx]["end"]
+            
+            # Update the pointer for next iterations
+            dub_ptr = target_end_idx + 1
         
         alignment.append({
             "orig_start": orig_start,

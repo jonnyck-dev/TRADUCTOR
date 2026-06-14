@@ -10,6 +10,11 @@ def generate_tts(chunks: list, output_dir: str, speaker_name: str = "en-Frank_ma
     """
     os.makedirs(output_dir, exist_ok=True)
     
+    expected_wav = os.path.join(output_dir, "script_generated.wav")
+    if os.path.exists(expected_wav) and os.path.getsize(expected_wav) > 0:
+        print(f"Skipping VibeVoice generation, using cached: {expected_wav}")
+        return expected_wav
+    
     # Write the script in VibeVoice multi-speaker format
     txt_path = os.path.join(output_dir, "script.txt")
     with open(txt_path, "w", encoding="utf-8") as f:

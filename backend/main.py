@@ -52,7 +52,7 @@ def download_and_extract(url: str, output_dir: str) -> tuple[str, str]:
             print(f"Skipping download, using cached files from {source_dir}")
             # Copy cached translations if available to skip those phases
             import shutil
-            for filename in ["english_whisper.json", "spanish_translated.json"]:
+            for filename in ["english_whisper.json", "spanish_translated.json", "script_generated.wav", "spanish_whisper.json"]:
                 src = os.path.join(source_dir, filename)
                 dst = os.path.join(output_dir, filename)
                 if os.path.exists(src) and not os.path.exists(dst):
@@ -155,7 +155,12 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str):
         tasks[task_id]["status"] = "transcribing_dub"
         tasks[task_id]["progress"] = 85
         dub_json_path = os.path.join(output_dir, "spanish_whisper.json")
-        dub_data = transcribe_audio(dubbed_wav_path, dub_json_path, language="Spanish")
+        if os.path.exists(dub_json_path):
+            print(f"Skipping dubbed audio transcription, using cached: {dub_json_path}")
+            with open(dub_json_path, 'r', encoding='utf-8') as f:
+                dub_data = json.load(f)
+        else:
+            dub_data = transcribe_audio(dubbed_wav_path, dub_json_path, language="Spanish")
         
         # 6. Splicing, stretching and overlaying
         tasks[task_id]["status"] = "synchronizing"
