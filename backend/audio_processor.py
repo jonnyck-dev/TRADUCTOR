@@ -463,6 +463,9 @@ def run_demucs_separation(audio_path: str, output_dir: str) -> tuple[str, str]:
     # Path to UVR5-UI
     uvr5_dir = "/mnt/d/documentos/descargas/Audio/IA/AUDIO ANALIZER/separacion de audio/UVR5-UI-v1.8.4/UVR5-UI"
     python_exe = os.path.join(uvr5_dir, "env", "Scripts", "python.exe")
+    # ponytail: fallback to env/python.exe if env/Scripts/python.exe does not exist
+    if not os.path.exists(python_exe):
+        python_exe = os.path.join(uvr5_dir, "env", "python.exe")
     model_dir = os.path.join(uvr5_dir, "models")
     
     # Check if UVR5-UI is available

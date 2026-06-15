@@ -35,19 +35,28 @@ Este proyecto es una aplicación web local que automatiza el proceso de traducci
    - Integración visual en el frontend (`index.html`, `app.js`, `style.css`) mediante un panel interactivo con barras de progreso de colores para cada fase y resumen de duración total, permitiendo diagnosticar cuellos de botella con facilidad.
 
 ---
+## 🎯 Plan de Optimización de Rendimiento y Correcciones Activas
 
-## 🎯 Próximas Mejoras & Futuras Implementaciones
+### 1. Persistencia Completa de VibeVoice en VRAM (Optimización de TTS) (Completado)
+* **Problema**: El pipeline actual de VibeVoice es lento porque los hilos individuales de procesamiento de frases pinguen al servidor con un timeout extremadamente corto (0.5s). Bajo carga de GPU/CPU, esta consulta falla por retraso y los hilos caen de vuelta a ejecutar el script independiente `python demo/inference_from_file.py`, lo que fuerza a cargar y descargar el modelo de 1.5B en VRAM para cada frase individual.
+* **Solución**:
+  - Refactorear `backend/tts_client.py` para evaluar la disponibilidad del servidor VibeVoice (`use_server = True`) una sola vez al inicio de `generate_individual_tts` tras levantar el proceso del servidor.
+  - Eliminar los pings por frase/hilo en `process_chunk`, forzando el uso exclusivo del servidor persistente.
+  - Esto garantiza que el modelo se cargue una sola vez en VRAM y permanezca activo hasta procesar la última frase del video.
+  - **Resultado**: VibeVoice evalúa `use_server` al inicio, evitando fallbacks innecesarios a subprocess y manteniendo el modelo cargado en la VRAM de forma persistente.
 
-### 1. Resolución del Problema de Pronunciación de Números en VibeVoice
-* **Observación**: VibeVoice tiende a pronunciar todos los números en inglés (por ejemplo, diciendo "three hundred" en lugar de "trescientos") aun cuando el texto se encuentra en español.
-* **Propuesta**: Implementar un preprocesador de texto en el backend que convierta todos los números a su representación en palabras en español (ej: `300` -> `trescientos`, `43%` -> `cuarenta y tres por ciento`) antes de enviarlo a la API de VibeVoice.
+### 2. Doblaje Rápido: Fallback a TTS Nativo de Windows (Completado)
+* **Problema**: Para pruebas rápidas o desarrollo, el flujo de VibeVoice (con clonación o síntesis profunda) puede tomar demasiado tiempo en videos largos.
+* **Solución**:
+  - Implementar un motor de síntesis de voz nativo en `backend/tts_client.py` que utilice PowerShell (`Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $synth.SetOutputToWaveFile(...)`) para generar el audio de forma instantánea.
+  - Mapear la voz `windows_native` en el dropdown del frontend (`frontend/index.html`) para que el usuario pueda elegir doblaje rápido robótico.
+  - **Resultado**: Integración funcional utilizando el sintetizador nativo de Windows vía PowerShell de forma instantánea, eludiendo la inicialización de VibeVoice y acelerando la generación.
 
-### 2. Sincronización Avanzada: Sistema de Compensación por Deuda de Silencio (Silence Debt)
-* **Observación**: Algunas frases se escuchan extremadamente lentas (slowmotion, ej: *"como siempre, gracias por vernos"*) o demasiado rápidas al intentar encajar con la línea de tiempo original.
-* **Propuesta de Arquitectura (Silence Debt Compensation)**:
-  - En lugar de estirar o encoger de forma agresiva cada frase de manera aislada (generando slowmotion o aceleraciones molestas), el pipeline mantendrá una **cuenta acumulada de silencio** (deuda de silencio).
-  - Si una frase es más larga que su espacio original, en lugar de acelerarla al máximo, puede "tomar prestado" tiempo del silencio del futuro (el espacio libre entre la frase actual y la siguiente).
-  - La "deuda" se iría pagando retrasando ligeramente el inicio de las frases siguientes o recortando silencios futuros innecesarios, ajustando dinámicamente el timeline hasta balancear la sincronización natural sin alterar la velocidad inteligible de la voz.
+### 3. Corrección del Bug de Separación de Audio (UVR5-UI) (Completado)
+* **Problema**: La carpeta `audio_separation` queda vacía en Windows porque la ruta del ejecutable de Python de UVR5-UI está hardcodeada a `env/Scripts/python.exe`, pero en algunas instalaciones el ejecutable se encuentra directamente en `env/python.exe`.
+* **Solución**:
+  - Modificar `backend/audio_processor.py` para buscar el ejecutable en `env/Scripts/python.exe` y, si no existe, retroceder a `env/python.exe`.
+  - **Resultado**: Se incorporó la ruta de fallback en `audio_processor.py` resolviendo el fallo silencioso al separar pistas.
 
 ### 4. Optimizaciones de Traducción y Gestión de Caché (Fase de Optimización Activa)
 * **Reducción de Temperatura (Ollama)**: Configurar la temperatura de traducción a `0.0` para que el modelo sea determinista y siga fielmente el formato JSON solicitado.
