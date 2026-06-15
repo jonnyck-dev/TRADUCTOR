@@ -28,10 +28,32 @@ def stretch_audio_segment(input_wav: str, output_wav: str, factor: float):
 
 def get_word_list(chunks: list) -> list:
     """
-    Flattens chunk segment text into a list of words with estimated timestamps.
+    Flattens chunk segment text into a list of words with estimated or actual timestamps.
     """
     words = []
     for chunk in chunks:
+        # Check if we have actual word-level timestamps from WhisperX
+        if "words" in chunk and chunk["words"]:
+            use_real_words = True
+            for w_info in chunk["words"]:
+                if not isinstance(w_info, dict) or "start" not in w_info or "end" not in w_info:
+                    use_real_words = False
+                    break
+            if use_real_words:
+                for w_info in chunk["words"]:
+                    w_text = w_info.get("word", "")
+                    w_norm = "".join(c for c in w_text.lower() if c.isalnum())
+                    w_start = w_info.get("start")
+                    w_end = w_info.get("end")
+                    if w_start is not None and w_end is not None and w_norm:
+                        words.append({
+                            "word": w_norm,
+                            "start": w_start,
+                            "end": w_end
+                        })
+                continue
+
+        # Fallback: estimate word timestamps linearly based on segment duration
         ts = chunk.get("timestamp")
         text = chunk.get("text", "")
         if not ts or len(ts) < 2 or not text:
@@ -45,7 +67,6 @@ def get_word_list(chunks: list) -> list:
         word_dur = duration / len(chunk_words)
         
         for idx, w in enumerate(chunk_words):
-            # Normalize word text (lowercase, alphanumeric only)
             w_norm = "".join(c for c in w.lower() if c.isalnum())
             if w_norm:
                 words.append({
