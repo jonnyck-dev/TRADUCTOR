@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const youtubeUrlInput = document.getElementById('youtube-url');
     const btnProcess = document.getElementById('btn-process');
     const btnStopTask = document.getElementById('btn-stop-task');
+    const btnNew = document.getElementById('btn-new');
     const startOverlay = document.getElementById('start-overlay');
     const processingOverlay = document.getElementById('processing-overlay');
     const videoPlayer = document.getElementById('video-player');
@@ -147,6 +148,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    btnNew.addEventListener('click', () => {
+        // Stop playback
+        videoPlayer.pause();
+        videoPlayer.src = '';
+        
+        // Hide video elements
+        videoPlayer.classList.add('hidden');
+        btnNew.classList.add('hidden');
+        
+        // Hide timers
+        const timersSection = document.getElementById('timers-section');
+        if (timersSection) timersSection.classList.add('hidden');
+        
+        // Reset subtitles
+        subtitlesViewport.innerHTML = '<p class="empty-subs-msg">Las subtítulos aparecerán aquí una vez procesado el video.</p>';
+        
+        // Show initial form
+        startOverlay.classList.remove('hidden');
+        youtubeUrlInput.value = '';
+        
+        // Reset status
+        globalStatus.innerHTML = '<span class="dot"></span> Listo para doblar';
+        currentTaskId = null;
+    });
+
     // Initial calls
     loadOllamaModels();
 
@@ -178,6 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
         startOverlay.classList.add('hidden');
         processingOverlay.classList.remove('hidden');
         videoPlayer.classList.add('hidden');
+        btnNew.classList.add('hidden');
         subtitlesViewport.innerHTML = '<p class="empty-subs-msg">El video está siendo procesado...</p>';
         
         const timersSection = document.getElementById('timers-section');
@@ -364,6 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadVideo(result) {
         processingOverlay.classList.add('hidden');
         videoPlayer.classList.remove('hidden');
+        btnNew.classList.remove('hidden');
         
         videoPlayer.src = result.video_url;
         videoPlayer.load();
