@@ -73,6 +73,11 @@
                             <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
                         </div>
                         <span class="progress-text" id="progress-text">0%</span>
+                        <div class="stop-button-container">
+                            <button id="btn-stop-task" class="glow-button stop-button">
+                                <i class="fa-solid fa-circle-stop"></i> Detener
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -104,11 +109,26 @@
                     <label for="select-model">Modelo de Traducción (Ollama)</label>
                     <div class="select-wrapper">
                         <select id="select-model">
-                            <option value="gemma4:e2b-it-qat">(Recomendado) gemma4:e2b-it-qat (4B)</option>
-                            <option value="qwen3.5:2b">qwen3.5:2b (2B)</option>
-                            <option value="qwen3.5:0.8b">qwen3.5:0.8b (0.8B)</option>
-                            <option value="SetneufPT/Qwopus3.5-4B-Coder-MTP_Q4_64k_8GB-GPU:latest">Qwopus 3.5 4B</option>
-                            <option value="gemma4:12b-it-qat">gemma4:12b-it-qat (12B)</option>
+                            <optgroup label="Modelos Locales (Ollama)">
+                                <option value="gemma4:e2b-it-qat" selected>(Recomendado) gemma4:e2b-it-qat (4B)</option>
+                                <option value="llama3.2:3b">llama3.2:3b (3B)</option>
+                                <option value="qwen3.5:2b">qwen3.5:2b (2B)</option>
+                                <option value="qwen3.5:0.8b">qwen3.5:0.8b (0.8B)</option>
+                                <option value="SetneufPT/Qwopus3.5-4B-Coder-MTP_Q4_64k_8GB-GPU:latest">Qwopus 3.5 4B</option>
+                                <option value="gemma4:12b-it-qat">gemma4:12b-it-qat (12B)</option>
+                                <option value="baytout3/qwen3.5-uncensored:4b">baytout3/qwen3.5-uncensored (4B)</option>
+                                <option value="qwen3.5:4b">qwen3.5:4b (4B)</option>
+                                <option value="qwen3.5:9b">qwen3.5:9b (9B)</option>
+                                <option value="medgemma1.5:latest">medgemma1.5 (3.3B)</option>
+                                <option value="gpt-oss:20b">gpt-oss (20B)</option>
+                            </optgroup>
+                            <optgroup label="Modelos Cloud (Requiere Suscripción)">
+                                <option value="deepseek-v4-pro:cloud">☁️ DeepSeek V4 Pro</option>
+                                <option value="deepseek-v4-flash:cloud">☁️ DeepSeek V4 Flash</option>
+                                <option value="nemotron-3-nano:30b-cloud">☁️ Nemotron 3 Nano (30B)</option>
+                                <option value="qwen3.5:cloud">☁️ Qwen 3.5 Cloud</option>
+                                <option value="gemma4:31b-cloud">☁️ Gemma 4 31B Cloud</option>
+                            </optgroup>
                         </select>
                         <i class="fa-solid fa-chevron-down dropdown-icon"></i>
                     </div>
@@ -118,11 +138,16 @@
                     <label for="select-speaker">Voz de Doblaje (VibeVoice)</label>
                     <div class="select-wrapper">
                         <select id="select-speaker">
-                            <option value="en-Frank_man">(Hombre) Frank</option>
-                            <option value="en-Carter_man">(Hombre) Carter</option>
-                            <option value="en-Davis_man">(Hombre) Davis</option>
-                            <option value="en-Grace_woman">(Mujer) Grace</option>
-                            <option value="en-Emma_woman">(Mujer) Emma</option>
+                            <optgroup label="Doblaje Personalizado">
+                                <option value="cloned_speaker" selected>🗣️ Voz Clonada (Original del Video)</option>
+                            </optgroup>
+                            <optgroup label="Voces Genéricas (VibeVoice)">
+                                <option value="en-Frank_man">(Hombre) Frank</option>
+                                <option value="en-Carter_man">(Hombre) Carter</option>
+                                <option value="en-Davis_man">(Hombre) Davis</option>
+                                <option value="en-Grace_woman">(Mujer) Grace</option>
+                                <option value="en-Emma_woman">(Mujer) Emma</option>
+                            </optgroup>
                         </select>
                         <i class="fa-solid fa-chevron-down dropdown-icon"></i>
                     </div>

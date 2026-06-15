@@ -1,122 +1,54 @@
-# Implementation Plan - Video Translator & Dubbing Web App
+# Plan de Implementación y Arquitectura - Traductor & Doblador de Video con IA
 
-This project consists of a local-running web application that downloads YouTube videos, transcribes them using the Windows-native `insanely-fast-whisper`, translates the transcription using a local Ollama model, and generates a synchronized Spanish dubbed audio track using Microsoft VibeVoice TTS. All operations are run natively under Windows.
-
----
-
-## User Review Required
-
-> [!IMPORTANT]
-> **Windows Native Execution**: Since Whisper and VibeVoice are installed on the Windows host (`C:\Users\jpzam\...`), the FastAPI server runs natively under Windows. All media files are saved inside the local `cache/` folder in the project root.
-
-> [!IMPORTANT]
-> **Audio Synchronization Pipeline**: We have two potential methods to generate and synchronize the Spanish dubbing. Please review the options below and let us know your preference.
-
-### Splicing & Sync Options:
-* **Option A: Batch Generation + Second Whisper Pass (Recommended)**
-  1. Generate the entire Spanish audio in **one run** of VibeVoice by writing a script file containing all segments (`Speaker 1: hola...\nSpeaker 1: bienvenido...`). This only runs the VibeVoice python script once, avoiding startup loading overhead.
-  2. Run `insanely-fast-whisper.exe` on the generated Spanish audio file to get a JSON with the exact timestamps of when the Spanish words were actually spoken.
-  3. Run a Python matching script (or Ollama 2B model) to align the original English segments with the Spanish segments.
-  4. Use `ffmpeg`/`pydub` to slice the Spanish audio at the detected timestamps, speed-up/slow-down each segment to match the original duration, and stitch them back into a single synchronized track.
-  
-* **Option B: Persistent Windows TTS API Server + Segment-by-Segment**
-  1. Create a tiny Python server (using FastAPI/Flask) running on the Windows Python environment that loads VibeVoice *once* on startup and keeps it in memory.
-  2. For each translation segment, the backend calls the Windows TTS API to generate a WAV file for that specific sentence.
-  3. The backend stretches/squeezes each WAV segment to match the original duration and overlays it at the original start time.
-  4. *Pros*: Trivial alignment, no second Whisper pass.
-  5. *Cons*: Requires running a separate background Python server in Windows command prompt in addition to the main server.
+Este proyecto es una aplicación web local que automatiza el proceso de traducción y doblaje de videos usando modelos locales en Windows.
 
 ---
 
-## Open Questions
+## 🚀 Estado de la Implementación (Ya Completado)
 
-> [!WARNING]
-> 1. **Default Ollama Model**: Which model would you prefer to use for translating the JSON transcription by default? We saw `qwen3.5:4b` and `gemma4:12b-it-qat` are available on your machine. We recommend `qwen3.5:4b` as it is fast and highly competent.
-> 2. **Audio Merging vs. Browser Overlay**: Would you prefer the backend to generate a final video file with the dubbed audio embedded (meaning the browser just plays a single video), or should the browser play the video muted and play the dubbed audio segments dynamically?
->    * *We recommend merging on the server via `ffmpeg`*, as it is much more robust and avoids browser audio sync drifts.
-
----
-
-## Proposed Changes
-
-The project will be created inside `G:\IA\PROYECTOS\Traductor`.
-
-```
-G:\IA\PROYECTOS\Traductor\
-├── backend/
-│   ├── main.py              # FastAPI server
-│   ├── requirements.txt     # Python backend dependencies (yt-dlp, pydub, etc.)
-│   ├── whisper_client.py    # Wrapper to call insanely-fast-whisper
-│   ├── translator.py        # Ollama JSON translation logic
-│   ├── tts_client.py        # Wrapper to call VibeVoice TTS
-│   └── audio_processor.py   # Audio alignment, stretching, and merging logic
-└── frontend/
-    ├── index.html           # Premium UI Structure
-    ├── style.css            # Dark mode, neon accents, glassmorphic styles
-    └── app.js               # Visualizing video, polling status, and controlling player
-```
-
-### Backend
-
-#### [NEW] [main.py](file:///home/clawbot/PROYECTO/IA/Traductor/backend/main.py)
-* Initialize a FastAPI application.
-* Endpoints:
-  * `POST /api/process`: Accepts a YouTube URL.
-    1. Downloads video/audio using `yt-dlp` to a shared folder.
-    2. Invokes Whisper to transcribe the English audio.
-    3. Invokes Ollama to translate the transcription JSON to Spanish.
-    4. Invokes VibeVoice TTS to generate Spanish dubbing.
-    5. Runs the audio synchronization pipeline to align the Spanish audio with the video.
-    6. Combines the synchronized audio and video using `ffmpeg`.
-  * `GET /api/status/{task_id}`: Polls the progress of the translation/dubbing task.
-  * Serve static files (frontend) and media files (cached videos and audios).
-
-#### [NEW] [requirements.txt](file:///home/clawbot/PROYECTO/IA/Traductor/backend/requirements.txt)
-* Core libraries: `fastapi`, `uvicorn`, `yt-dlp`, `pydub`, `requests`.
-
-#### [NEW] [whisper_client.py](file:///home/clawbot/PROYECTO/IA/Traductor/backend/whisper_client.py)
-* Logic to translate WSL paths to Windows paths (`wslpath -w`).
-* Invokes `cmd.exe /c` with the insanely-fast-whisper activation environment and arguments.
-
-#### [NEW] [translator.py](file:///home/clawbot/PROYECTO/IA/Traductor/backend/translator.py)
-* Calls the local Ollama API (`http://127.0.0.1:11434/api/generate` or `/api/chat`).
-* Prompts the LLM (e.g. `qwen3.5:4b`) to translate the text in the JSON transcript segment-by-segment, keeping the exact same structure (timestamps, speakers, ids) and returning valid JSON.
-
-#### [NEW] [tts_client.py](file:///home/clawbot/PROYECTO/IA/Traductor/backend/tts_client.py)
-* Invokes VibeVoice TTS script using `cmd.exe /c`.
-* Supports selecting different speakers (e.g., Frank, Carter, etc.).
-
-#### [NEW] [audio_processor.py](file:///home/clawbot/PROYECTO/IA/Traductor/backend/audio_processor.py)
-* Uses `pydub` to slice, adjust speed (time-stretch), and merge the audio segments.
-* Slices the dubbed Spanish track at the timestamps indicated by the second Whisper pass.
-* Stretches each segment to fit the original segment duration.
-* Overlays them on top of a silent background at the correct original timestamps.
-* Merges the synchronized dubbed audio track back into the video file using `ffmpeg`.
-
-### Frontend
-
-#### [NEW] [index.html](file:///home/clawbot/PROYECTO/IA/Traductor/frontend/index.html)
-* High-end UI structure with a main player viewport and a sidebar.
-* Input field for YouTube URL, with a prominent "Translate & Dub" action button.
-* Side control panel:
-  * Select translation model, target speaker, and toggle options.
-* Sidebar with scrolling, interactive subtitles highlighting the current sentence synced with the player.
-
-#### [NEW] [style.css](file:///home/clawbot/PROYECTO/IA/Traductor/frontend/style.css)
-* Custom modern styling (dark mode background, neon teal/purple glow, glassmorphic panels, and smooth transitions).
-
-#### [NEW] [app.js](file:///home/clawbot/PROYECTO/IA/Traductor/frontend/app.js)
-* Handle video playback, custom events for subtitle highlighting, and AJAX requests to the backend.
+1. **Servidor Backend (FastAPI)**: Pipeline orquestado en `backend/main.py` ejecutándose de forma nativa en Windows/WSL.
+2. **Transcripción (WhisperX)**: Integración en `backend/whisper_client.py` que provee alineación a nivel de palabra para máxima precisión.
+3. **Traducción Robusta (Ollama)**: Traducción segmentada en `backend/translator.py` con fallbacks automáticos batch-by-batch y chunk-by-chunk para evitar oraciones en inglés.
+4. **Optimización de TTS (VibeVoice)**:
+   - Procesamiento en paralelo limitado a **2 hilos** para proteger la VRAM y evitar congelamientos de la PC.
+   - Servidor VibeVoice FastAPI integrado que se levanta y apaga dinámicamente antes y después del TTS para liberar memoria.
+   - Slicing automático a un límite de 2 minutos para evitar la degradación y alucinación del modelo.
+5. **Botón Detener/Pausar**:
+   - Botón interactivo en la UI para detener el proceso en vivo.
+   - Endpoint de cancelación `/api/cancel/{task_id}` que limpia los hilos y apaga el servidor TTS de inmediato.
+   - Caché in-place que permite retomar exactamente desde la última frase sintetizada al volver a comenzar con la misma caché.
+6. **Clonación de Voz Zero-Shot (One-Shot Example)**:
+   - Opción *"Voz Clonada"* agregada a la UI.
+   - Extracción automática de una muestra limpia de 1 minuto del audio original en inglés buscando el inicio del primer fragmento de voz transcrito por Whisper.
+   - Copia dinámica en `backend/vibevoice/demo/voices/cloned_speaker.wav` para su uso automático en VibeVoice.
+7. **Separación de Voz e Instrumental (Demucs)**:
+   - Integración local de `audio-separator` y el modelo `htdemucs_ft.yaml` utilizando el entorno virtual y checkpoints de `UVR5-UI`.
+   - Extracción de `vocals.wav` para una transcripción WhisperX libre de alucinaciones y un sampleado de clonación de voz extremadamente limpio.
+   - Reconstrucción automática de la pista de efectos y música de fondo (`no_vocals.wav`) fusionando los canales Bass, Drums y Other con `pydub`.
+   - Mezcla final profesional (`dubbed_mixed.wav`) que combina la voz doblada en español con el fondo original con volumen ajustado, preservando la música y efectos especiales en estéreo.
+8. **Detección y Advertencia de Modelos Cloud (Ollama)**:
+   - Implementación de la función de validación `call_ollama_api` en `translator.py` con una clase de excepción dedicada `OllamaCloudModelError` para aislar fallos de JSONDecodeError.
+   - Eliminación de todas las lógicas de fallback y cascadas (traducción por lotes/individuales) en `translator.py` a solicitud del usuario, configurando un modo **One-Shot 100% Exclusivo** para medir con precisión la velocidad de los modelos cloud.
+   - Actualización del selector en `index.html` organizando los modelos con `<optgroup>` y añadiendo las opciones reales de tu máquina (`deepseek-v4-pro:cloud`, `deepseek-v4-flash:cloud`, `nemotron-3-nano:30b-cloud`, `qwen3.5:cloud`, `gemma4:31b-cloud`).
 
 ---
 
-## Verification Plan
+## 🎯 Próximas Mejoras & Futuras Implementaciones
 
-### Automated Tests
-- Test Whisper invocation: Run Python script that calls Whisper on a test audio file and outputs JSON.
-- Test Ollama translation: Send a dummy JSON to Ollama and verify it translates correctly while keeping JSON syntax.
-- Test VibeVoice invocation: Run VibeVoice with a dummy text file and check for a generated `.wav` file.
-- Run FastAPI app and verify endpoints.
+### 1. Resolución del Problema de Pronunciación de Números en VibeVoice
+* **Observación**: VibeVoice tiende a pronunciar todos los números en inglés (por ejemplo, diciendo "three hundred" en lugar de "trescientos") aun cuando el texto se encuentra en español.
+* **Propuesta**: Implementar un preprocesador de texto en el backend que convierta todos los números a su representación en palabras en español (ej: `300` -> `trescientos`, `43%` -> `cuarenta y tres por ciento`) antes de enviarlo a la API de VibeVoice.
 
-### Manual Verification
-- Paste a YouTube URL in the browser, check download speed, verify transcription, watch the generated dubbed video, and listen to the audio sync.
+### 2. Sincronización Avanzada: Sistema de Compensación por Deuda de Silencio (Silence Debt)
+* **Observación**: Algunas frases se escuchan extremadamente lentas (slowmotion, ej: *"como siempre, gracias por vernos"*) o demasiado rápidas al intentar encajar con la línea de tiempo original.
+* **Propuesta de Arquitectura (Silence Debt Compensation)**:
+  - En lugar de estirar o encoger de forma agresiva cada frase de manera aislada (generando slowmotion o aceleraciones molestas), el pipeline mantendrá una **cuenta acumulada de silencio** (deuda de silencio).
+  - Si una frase es más larga que su espacio original, en lugar de acelerarla al máximo, puede "tomar prestado" tiempo del silencio del futuro (el espacio libre entre la frase actual y la siguiente).
+  - La "deuda" se iría pagando retrasando ligeramente el inicio de las frases siguientes o recortando silencios futuros innecesarios, ajustando dinámicamente el timeline hasta balancear la sincronización natural sin alterar la velocidad inteligible de la voz.
+
+### 3. Evitar Colisiones de Clonación en Entornos Multiusuario (Producción)
+* **Observación**: Para simplificar las pruebas locales actuales, todas las clonaciones escriben sobre el mismo archivo estático (`cloned_speaker.wav`). En un entorno multiusuario concurrente, esto causaría que las voces de diferentes usuarios colisionen y se mezclen.
+* **Propuesta**:
+  - Reemplazar el nombre estático por el UUID de la tarea (`cloned_{task_id}.wav`).
+  - El servidor VibeVoice debe mapear dinámicamente el speaker `cloned_{task_id}` leyendo el archivo respectivo.
+  - Al completar la tarea, el pipeline debe eliminar automáticamente el archivo temporal de voz para no saturar el almacenamiento.

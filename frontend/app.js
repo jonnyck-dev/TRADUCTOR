@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Elements
     const youtubeUrlInput = document.getElementById('youtube-url');
     const btnProcess = document.getElementById('btn-process');
+    const btnStopTask = document.getElementById('btn-stop-task');
     const startOverlay = document.getElementById('start-overlay');
     const processingOverlay = document.getElementById('processing-overlay');
     const videoPlayer = document.getElementById('video-player');
@@ -26,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let pollInterval = null;
     let subtitleData = [];
     let activeSubIndex = -1;
+    let currentTaskId = null;
 
     // Helper: format time in MM:SS
     function formatTime(seconds) {
@@ -134,11 +136,43 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .then(data => {
             const taskId = data.task_id;
+            currentTaskId = taskId;
             startPolling(taskId);
         })
         .catch(err => {
             showError(err.message);
         });
+    });
+
+    // Stop button event listener
+    btnStopTask.addEventListener('click', () => {
+        if (!currentTaskId) return;
+        if (confirm('¿Estás seguro de que deseas detener el doblaje? Podrás continuar desde esta misma frase más tarde usando la misma caché.')) {
+            // Cancelar inmediatamente el polling del cliente y restaurar la vista
+            if (pollInterval) clearInterval(pollInterval);
+            const stoppingTaskId = currentTaskId;
+            currentTaskId = null;
+            
+            processingOverlay.classList.add('hidden');
+            startOverlay.classList.remove('hidden');
+            globalStatus.innerHTML = `<span class="dot" style="background-color: #ff4757; box-shadow: 0 0 8px #ff4757;"></span> Deteniendo...`;
+            
+            fetch(`/api/cancel/${stoppingTaskId}`, {
+                method: 'POST'
+            })
+            .then(res => {
+                if (!res.ok) throw new Error('Error al solicitar detener la tarea.');
+                return res.json();
+            })
+            .then(data => {
+                console.log('Task cancellation requested:', data);
+                globalStatus.innerHTML = `<span class="dot" style="background-color: #ff4757; box-shadow: 0 0 8px #ff4757;"></span> Detenido por usuario`;
+            })
+            .catch(err => {
+                console.error('Error in cancellation request:', err);
+                alert(`Error al detener la tarea: ${err.message}`);
+            });
+        }
     });
 
     // Polling function
@@ -160,6 +194,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (data.status === 'failed') {
                     clearInterval(pollInterval);
                     showError(data.error || 'Ocurrió un error desconocido.');
+                } else if (data.status === 'stopped') {
+                    clearInterval(pollInterval);
+                    showStopped(data.error || 'Doblaje detenido por el usuario.');
                 }
             })
             .catch(err => {
@@ -234,9 +271,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusText = 'Error en el doblaje';
                 statusDotColor = '#ef4444';
                 break;
+            case 'stopped':
+                statusText = 'Detenido';
+                statusDotColor = '#ff4757';
+                break;
         }
 
         globalStatus.innerHTML = `<span class="dot" style="background-color: ${statusDotColor}; box-shadow: 0 0 8px ${statusDotColor};"></span> ${statusText}`;
+    }
+
+    // Show stopped message
+    function showStopped(message) {
+        processingOverlay.classList.add('hidden');
+        startOverlay.classList.remove('hidden');
+        alert(`El doblaje se ha detenido: ${message}`);
+        globalStatus.innerHTML = `<span class="dot" style="background-color: #ff4757; box-shadow: 0 0 8px #ff4757;"></span> Detenido`;
     }
 
     // Show error message
