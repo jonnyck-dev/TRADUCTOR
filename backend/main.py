@@ -305,6 +305,10 @@ def prepare_cloned_voice(audio_path: str, whisper_json_path: str):
         traceback.print_exc()
 
 def process_translation_task(task_id: str, url: str, model: str, speaker: str):
+    import time
+    start_task_time = time.time()
+    step_times = {}
+    
     try:
         remove_cancelled_task(task_id)
         output_dir = os.path.join(CACHE_DIR, task_id)
@@ -313,24 +317,31 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str):
         downloads_dir = os.path.join(output_dir, "downloads")
         whisper_dir = os.path.join(output_dir, "whisper")
         tts_dir = os.path.join(output_dir, "tts")
+        audio_sep_dir = os.path.join(output_dir, "audio_separation")
         
         os.makedirs(downloads_dir, exist_ok=True)
         os.makedirs(whisper_dir, exist_ok=True)
         os.makedirs(tts_dir, exist_ok=True)
+        os.makedirs(audio_sep_dir, exist_ok=True)
         
         # 1. Download YouTube Video & Extract Audio
+        t0 = time.time()
         tasks[task_id]["status"] = "downloading"
         tasks[task_id]["progress"] = 15
         video_path, audio_path = download_and_extract(url, output_dir)
+        step_times["1_download_and_extract"] = time.time() - t0
         
         # 1b. Run Demucs separation to get vocals.wav and no_vocals.wav (with fallback)
-        vocals_wav_path, background_wav_path = run_demucs_separation(audio_path, downloads_dir)
+        t0 = time.time()
+        vocals_wav_path, background_wav_path = run_demucs_separation(audio_path, audio_sep_dir)
+        step_times["1b_demucs_separation"] = time.time() - t0
         
         # Calculate original duration
         audio_segment = AudioSegment.from_wav(audio_path)
         duration_sec = audio_segment.duration_seconds
         
         # 2. Transcribe English Audio
+        t0 = time.time()
         tasks[task_id]["status"] = "transcribing"
         tasks[task_id]["progress"] = 35
         orig_json_path = os.path.join(whisper_dir, "english_whisper.json")
@@ -341,12 +352,14 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str):
         else:
             # Transcribe the clean vocals track to prevent hallucinations caused by background noise
             orig_data = transcribe_audio(vocals_wav_path, orig_json_path, language="English")
+        step_times["2_transcription"] = time.time() - t0
             
         # 2b. Preprocess Chunks (split segments exceeding 120s duration)
         orig_chunks = orig_data.get("chunks", [])
         preprocessed_chunks = preprocess_chunks(orig_chunks)
         
         # 3. Translate JSON to Spanish using Ollama
+        t0 = time.time()
         tasks[task_id]["status"] = "translating"
         tasks[task_id]["progress"] = 55
         translated_json_path = os.path.join(whisper_dir, "spanish_translated.json")
@@ -363,32 +376,42 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str):
             }
             with open(translated_json_path, "w", encoding="utf-8") as f:
                 json.dump(translated_data, f, ensure_ascii=False, indent=2)
+        step_times["3_translation"] = time.time() - t0
             
         # 4. Generate individual Spanish TTS MP3s using VibeVoice
+        t0 = time.time()
         tasks[task_id]["status"] = "synthesizing"
         tasks[task_id]["progress"] = 75
         if speaker == "cloned_speaker":
             # Extract 1 minute sample from clean vocals wav instead of noisy original audio
             prepare_cloned_voice(vocals_wav_path, orig_json_path)
         mp3_paths = generate_individual_tts(translated_chunks, tts_dir, speaker_name=speaker, task_id=task_id)
+        step_times["4_tts_synthesis"] = time.time() - t0
         
         # 5. Overlay, synchronize and speed up chunks (Splicing, stretching and overlaying)
+        t0 = time.time()
         tasks[task_id]["status"] = "synchronizing"
         tasks[task_id]["progress"] = 85
         synced_wav_path = os.path.join(output_dir, "dubbed_synced.wav")
         sync_individual_phrases(translated_chunks, mp3_paths, synced_wav_path, duration_sec)
+        step_times["5_synchronization"] = time.time() - t0
         
         # 5b. Mix synced Spanish voice and original background instrumental track
+        t0 = time.time()
         mixed_wav_path = os.path.join(output_dir, "dubbed_mixed.wav")
         mix_voice_and_background(synced_wav_path, background_wav_path, mixed_wav_path)
+        step_times["5b_audio_mixing"] = time.time() - t0
         
         # 6. Merge dubbed audio and original video track (removing orig audio)
+        t0 = time.time()
         tasks[task_id]["status"] = "merging"
         tasks[task_id]["progress"] = 90
         output_video_path = os.path.join(output_dir, "video_dubbed.mp4")
         merge_audio_video(video_path, mixed_wav_path, output_video_path)
+        step_times["6_video_merging"] = time.time() - t0
         
         # 7. QA Verification: transcribe final dubbed WAV and compare against Spanish translation
+        t0 = time.time()
         tasks[task_id]["status"] = "verifying"
         tasks[task_id]["progress"] = 95
         print("Starting QA Verification...")
@@ -421,6 +444,27 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str):
             json.dump(verification_report, f, ensure_ascii=False, indent=2)
             
         print(f"QA Verification completed: Accuracy: {ratio*100:.2f}%. Passed: {passed}")
+        step_times["7_qa_verification"] = time.time() - t0
+        
+        # Calculate total task duration
+        total_task_time = time.time() - start_task_time
+        step_times["total_duration"] = total_task_time
+        
+        # Save timing report
+        timing_report_path = os.path.join(output_dir, "timing_report.json")
+        with open(timing_report_path, "w", encoding="utf-8") as f:
+            json.dump(step_times, f, ensure_ascii=False, indent=2)
+            
+        # Print a beautiful summary of timers in the console
+        print("\n" + "="*50)
+        print("   REPORTE DE TIEMPOS DE EJECUCIÓN (TIMERS)")
+        print("="*50)
+        for step_name, duration in step_times.items():
+            if step_name != "total_duration":
+                print(f" - {step_name:<25}: {duration:6.2f} segundos ({duration/total_task_time*100:5.1f}%)")
+        print("-"*50)
+        print(f" * TOTAL PIPELINE DURATION  : {total_task_time:6.2f} segundos")
+        print("="*50 + "\n")
         
         # 8. Finished
         tasks[task_id]["status"] = "completed"
@@ -429,6 +473,7 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str):
             "video_url": f"/cache/{task_id}/video_dubbed.mp4",
             "original_json": orig_data,
             "translated_json": translated_data,
+            "timing_report": step_times,
             "verification": {
                 "accuracy_ratio": ratio,
                 "passed": passed,
@@ -484,6 +529,48 @@ def get_task_status(task_id: str):
     if task_id not in tasks:
         raise HTTPException(status_code=404, detail="Task not found")
     return tasks[task_id]
+
+@app.get("/api/models")
+def get_ollama_models():
+    import requests
+    # 1. Try Ollama local HTTP API
+    try:
+        response = requests.get("http://127.0.0.1:11434/api/tags", timeout=3)
+        if response.status_code == 200:
+            data = response.json()
+            model_names = [m.get("name") for m in data.get("models", [])]
+            return {"status": "ok", "models": model_names}
+    except Exception as e:
+        print(f"Ollama local API /tags call failed: {e}")
+        
+    # 2. Try running "ollama list" CLI via subprocess
+    try:
+        res = subprocess.run(["ollama", "list"], capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=3)
+        if res.returncode == 0:
+            models = []
+            lines = res.stdout.strip().split('\n')
+            if len(lines) > 1:
+                # Skip header
+                for line in lines[1:]:
+                    parts = line.split()
+                    if parts:
+                        models.append(parts[0])
+                return {"status": "ok", "models": models}
+    except Exception as e:
+        print(f"Ollama list execution failed: {e}")
+        
+    # 3. Static fallback
+    return {
+        "status": "fallback",
+        "models": [
+            "gemma4:e2b-it-qat",
+            "llama3.2:3b",
+            "qwen3.5:2b",
+            "deepseek-v4-pro:cloud",
+            "deepseek-v4-flash:cloud",
+            "nemotron-3-nano:30b-cloud"
+        ]
+    }
 
 @app.get("/api/caches")
 def list_available_caches():

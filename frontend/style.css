@@ -661,3 +661,105 @@ video {
     box-shadow: 0 0 15px var(--accent-glow-red);
     transform: translateY(-1px);
 }
+
+/* Sidebar Scrollable Container */
+.sidebar-scrollable {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    overflow-y: auto;
+    flex-grow: 1;
+    padding-right: 6px;
+    margin-bottom: 16px;
+}
+
+/* Custom scrollbar for sidebar scrollable to keep theme consistent */
+.sidebar-scrollable::-webkit-scrollbar {
+    width: 4px;
+}
+.sidebar-scrollable::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+}
+
+/* Pipeline Timers Styling */
+.timers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 10px;
+}
+
+.timer-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.timer-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.timer-item-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-text-main);
+}
+
+.timer-item-val {
+    color: var(--color-text-muted);
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.timer-bar-container {
+    height: 6px;
+    background-color: rgba(255, 255, 255, 0.04);
+    border-radius: 3px;
+    overflow: hidden;
+    width: 100%;
+}
+
+.timer-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.1);
+}
+
+.timer-item-footer {
+    font-size: 11px;
+    color: var(--color-text-dim);
+    text-align: right;
+}
+
+.timer-total-summary {
+    margin-top: 8px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px dashed var(--border-color);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.total-label {
+    font-size: 11px;
+    color: var(--color-text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.total-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent-teal);
+    text-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
+}

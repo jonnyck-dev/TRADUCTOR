@@ -80,6 +80,60 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Fetch Ollama models dynamically and group them
+    function loadOllamaModels() {
+        fetch('/api/models')
+        .then(res => res.json())
+        .then(data => {
+            selectModel.innerHTML = '';
+            
+            const models = data.models || [];
+            if (models.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = '(No se encontraron modelos de Ollama)';
+                selectModel.appendChild(opt);
+                return;
+            }
+            
+            const localGroup = document.createElement('optgroup');
+            localGroup.label = 'Modelos Locales (Ollama)';
+            
+            const cloudGroup = document.createElement('optgroup');
+            cloudGroup.label = 'Modelos Cloud (Requiere Suscripción)';
+            
+            let hasLocal = false;
+            let hasCloud = false;
+            
+            models.forEach(modelName => {
+                const opt = document.createElement('option');
+                opt.value = modelName;
+                
+                if (modelName.includes('cloud')) {
+                    opt.textContent = `☁️ ${modelName}`;
+                    cloudGroup.appendChild(opt);
+                    hasCloud = true;
+                } else {
+                    if (modelName === 'gemma4:e2b-it-qat') {
+                        opt.textContent = `⭐ (Recomendado) ${modelName}`;
+                        opt.selected = true;
+                    } else {
+                        opt.textContent = modelName;
+                    }
+                    localGroup.appendChild(opt);
+                    hasLocal = true;
+                }
+            });
+            
+            if (hasLocal) selectModel.appendChild(localGroup);
+            if (hasCloud) selectModel.appendChild(cloudGroup);
+        })
+        .catch(err => {
+            console.error('Error fetching Ollama models:', err);
+            selectModel.innerHTML = '<option value="">Error al cargar modelos de Ollama</option>';
+        });
+    }
+
     chkUseCache.addEventListener('change', () => {
         if (chkUseCache.checked) {
             cacheSelectWrapper.classList.remove('hidden');
@@ -92,6 +146,9 @@ document.addEventListener('DOMContentLoaded', () => {
             youtubeUrlInput.placeholder = 'https://www.youtube.com/watch?v=...';
         }
     });
+
+    // Initial calls
+    loadOllamaModels();
 
     // Start processing YouTube video
     btnProcess.addEventListener('click', () => {
@@ -122,6 +179,11 @@ document.addEventListener('DOMContentLoaded', () => {
         processingOverlay.classList.remove('hidden');
         videoPlayer.classList.add('hidden');
         subtitlesViewport.innerHTML = '<p class="empty-subs-msg">El video está siendo procesado...</p>';
+        
+        const timersSection = document.getElementById('timers-section');
+        if (timersSection) {
+            timersSection.classList.add('hidden');
+        }
         
         updateStatus('queued', 0);
 
@@ -325,8 +387,70 @@ document.addEventListener('DOMContentLoaded', () => {
         
         renderSubtitles();
         
+        // Render execution timers
+        const timersSection = document.getElementById('timers-section');
+        const timersList = document.getElementById('timers-list');
+        if (timersSection && timersList && result.timing_report) {
+            timersSection.classList.remove('hidden');
+            renderTimersReport(result.timing_report, timersList);
+        } else if (timersSection) {
+            timersSection.classList.add('hidden');
+        }
+        
         // Auto play
         videoPlayer.play();
+    }
+
+    // Render execution times bar graph
+    function renderTimersReport(timingReport, container) {
+        container.innerHTML = '';
+        const totalDuration = timingReport.total_duration || 1;
+        
+        const stepLabels = {
+            "1_download_and_extract": { name: "Descarga de Video", icon: "fa-download", color: "var(--accent-teal)" },
+            "1b_demucs_separation": { name: "Separación Vocal (Demucs)", icon: "fa-scissors", color: "#60a5fa" },
+            "2_transcription": { name: "Transcripción (WhisperX)", icon: "fa-closed-captioning", color: "#f59e0b" },
+            "3_translation": { name: "Traducción (Ollama)", icon: "fa-language", color: "#8b5cf6" },
+            "4_tts_synthesis": { name: "Doblaje (VibeVoice)", icon: "fa-microphone", color: "#d946ef" },
+            "5_synchronization": { name: "Sincronización Temporal", icon: "fa-clock", color: "#06b6d4" },
+            "5b_audio_mixing": { name: "Mezcla de Audio", icon: "fa-sliders", color: "#14b8a6" },
+            "6_video_merging": { name: "Ensamble de Video", icon: "fa-film", color: "#10b981" },
+            "7_qa_verification": { name: "Verificación de Calidad QA", icon: "fa-clipboard-check", color: "#ec4899" }
+        };
+        
+        for (const [key, duration] of Object.entries(timingReport)) {
+            if (key === 'total_duration' || !stepLabels[key]) continue;
+            
+            const stepInfo = stepLabels[key];
+            const pct = ((duration / totalDuration) * 100).toFixed(1);
+            
+            const timerItem = document.createElement('div');
+            timerItem.className = 'timer-item';
+            timerItem.innerHTML = `
+                <div class="timer-item-header">
+                    <span class="timer-item-title">
+                        <i class="fa-solid ${stepInfo.icon}" style="color: ${stepInfo.color}"></i> 
+                        ${stepInfo.name}
+                    </span>
+                    <span class="timer-item-val">${duration.toFixed(1)}s</span>
+                </div>
+                <div class="timer-bar-container">
+                    <div class="timer-bar" style="width: ${pct}%; background-color: ${stepInfo.color}"></div>
+                </div>
+                <div class="timer-item-footer">
+                    <span>${pct}% del total</span>
+                </div>
+            `;
+            container.appendChild(timerItem);
+        }
+        
+        const totalItem = document.createElement('div');
+        totalItem.className = 'timer-total-summary';
+        totalItem.innerHTML = `
+            <div class="total-label">Tiempo Total de Ejecución</div>
+            <div class="total-value">${totalDuration.toFixed(1)}s</div>
+        `;
+        container.appendChild(totalItem);
     }
 
     // Render subtitle lines into the viewport

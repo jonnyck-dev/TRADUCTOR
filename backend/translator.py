@@ -27,6 +27,39 @@ def call_ollama_api(url: str, payload: dict, timeout: float) -> dict:
             raise OllamaCloudModelError(f"error modelo cloud: {err_msg}")
         raise e
 
+def fix_json_quotes(json_str: str) -> str:
+    """
+    Finds "text": "value" pairs in the JSON string, programmatically escapes 
+    any internal unescaped double quotes, and repairs missing commas between fields or objects.
+    """
+    # 1. Fix missing commas between chunk objects: } { -> },{
+    json_str = re.sub(r'\}\s*\{', '},\n{', json_str)
+    
+    # 2. Fix missing commas between array elements if bracket closed: ] { -> ],{
+    json_str = re.sub(r'\]\s*\{', '],\n{', json_str)
+    
+    def replace_quote(match):
+        prefix = match.group(1)
+        content = match.group(2)
+        suffix = match.group(3)
+        
+        # Escape double quotes inside content, preserving already escaped quotes
+        temp = content.replace('\\"', '___ESCAPED_QUOTE___')
+        temp = temp.replace('"', '\\"')
+        escaped_content = temp.replace('___ESCAPED_QUOTE___', '\\"')
+        
+        # Reconstruct suffix to ensure there is a comma before "timestamp"
+        # If suffix doesn't contain a comma but has "timestamp", insert it!
+        if "timestamp" in suffix and "," not in suffix:
+            suffix = '", "timestamp"'
+            
+        return prefix + escaped_content + suffix
+        
+    # Matches "text": "content" followed optionally by a comma, then "timestamp", or followed by object close
+    # Using negative lookbehind (?<!\\) to ensure ending quote is not an escaped quote
+    pattern = r'("text"\s*:\s*")(.*?)((?<!\\)"\s*,?\s*(?<!\\)"timestamp"|\s*\})'
+    return re.sub(pattern, replace_quote, json_str, flags=re.DOTALL)
+
 def translate_chunks(chunks: list, model: str = "gemma4:e2b-it-qat") -> list:
     url = "http://127.0.0.1:11434/api/chat"
     system_msg = (
@@ -37,53 +70,144 @@ def translate_chunks(chunks: list, model: str = "gemma4:e2b-it-qat") -> list:
         "Return the resulting JSON object with the translated 'chunks' and nothing else."
     )
     
-    print(f"\n--- Iniciando traducción de {len(chunks)} chunks con {model} (Modo One-Shot Exclusivo) ---")
+    print(f"\n--- Iniciando traducción de {len(chunks)} chunks con {model} (Modo One-Shot Exclusivo + Optimizados) ---")
     
+    # Compress chunks: extract only text and timestamp (skip detailed words array to save tokens and prevent LLM syntax confusion)
+    minimal_chunks = []
+    for c in chunks:
+        minimal_chunks.append({
+            "text": c.get("text", ""),
+            "timestamp": c.get("timestamp", [0.0, 0.0])
+        })
+        
     payload = {
         "model": model,
         "messages": [
             {"role": "system", "content": system_msg},
-            {"role": "user", "content": json.dumps({"chunks": chunks}, ensure_ascii=False)}
+            {"role": "user", "content": json.dumps({"chunks": minimal_chunks}, ensure_ascii=False)}
         ],
         "stream": False,
         "format": "json",
         "options": {
             "num_ctx": 128000,
-            "num_predict": 32768
+            "num_predict": 32768,
+            "temperature": 0.0
         }
     }
     
     try:
-        print("Enviando todos los chunks en un solo query (One-Shot)...")
+        print("Enviando chunks minimalistas en un solo query (One-Shot)...")
         # One-shot timeout set to 300 seconds (5 minutes)
         result = call_ollama_api(url, payload, timeout=300)
         content = result.get("message", {}).get("content", "").strip()
         
+        # Clean think tags
         if "<think>" in content:
             content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
             
-        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(1)
+        # Clean markdown code block wraps if present
+        clean_content = content
+        if clean_content.startswith("```"):
+            clean_content = re.sub(r'^```(?:json)?\s*', '', clean_content)
+        if clean_content.endswith("```"):
+            clean_content = re.sub(r'\s*```$', '', clean_content)
+            
+        start = clean_content.find('{')
+        end = clean_content.rfind('}')
+        if start != -1 and end != -1:
+            json_str = clean_content[start:end+1]
         else:
-            start = content.find('{')
-            end = content.rfind('}')
-            if start != -1 and end != -1:
-                json_str = content[start:end+1]
-            else:
-                json_str = content
+            json_str = clean_content
 
-        translated_data = json.loads(json_str)
-        translated_chunks = translated_data.get("chunks", [])
+        # Escape internal double quotes in text fields
+        json_str = fix_json_quotes(json_str)
+
+        translated_minimal_chunks = []
+        max_attempts = 5
+        current_attempt = 1
+        last_error = None
         
-        if len(translated_chunks) == len(chunks):
+        while current_attempt <= max_attempts:
+            try:
+                translated_data = json.loads(json_str, strict=False)
+                translated_minimal_chunks = translated_data.get("chunks", [])
+                break
+            except json.JSONDecodeError as jde:
+                last_error = jde
+                print(f"Advertencia: Intento {current_attempt}/{max_attempts} falló con JSONDecodeError: {jde}. Solicitando auto-corrección al LLM...")
+                
+                if current_attempt == max_attempts:
+                    break
+                    
+                correction_prompt = (
+                    f"The following JSON text contains a syntax error: {jde}.\n"
+                    f"Please fix ONLY the syntax errors (such as missing commas, unescaped quotes, or unmatched brackets) "
+                    f"and return the valid corrected JSON object containing the 'chunks' key.\n"
+                    f"Do not change the translations. Return ONLY the raw corrected JSON and nothing else.\n\n"
+                    f"MALFORMED JSON:\n{json_str}"
+                )
+                payload_correction = {
+                    "model": model,
+                    "messages": [
+                        {"role": "user", "content": correction_prompt}
+                    ],
+                    "stream": False,
+                    "format": "json",
+                    "options": {
+                        "num_ctx": 128000,
+                        "num_predict": 32768,
+                        "temperature": 0.0
+                    }
+                }
+                try:
+                    corr_result = call_ollama_api(url, payload_correction, timeout=180)
+                    corr_content = corr_result.get("message", {}).get("content", "").strip()
+                    
+                    # Clean think tags and markdown
+                    if "<think>" in corr_content:
+                        corr_content = re.sub(r'<think>.*?</think>', '', corr_content, flags=re.DOTALL).strip()
+                    
+                    clean_corr = corr_content
+                    if clean_corr.startswith("```"):
+                        clean_corr = re.sub(r'^```(?:json)?\s*', '', clean_corr)
+                    if clean_corr.endswith("```"):
+                        clean_corr = re.sub(r'\s*```$', '', clean_corr)
+                    
+                    start_corr = clean_corr.find('{')
+                    end_corr = clean_corr.rfind('}')
+                    if start_corr != -1 and end_corr != -1:
+                        json_str = clean_corr[start_corr:end_corr+1]
+                    else:
+                        json_str = clean_corr
+                        
+                    # Also fix unescaped double quotes on LLM-corrected JSON string
+                    json_str = fix_json_quotes(json_str)
+                except Exception as e_corr:
+                    print(f"Error al enviar consulta de corrección en intento {current_attempt}: {e_corr}")
+                    raise jde
+                    
+                current_attempt += 1
+                
+        if not translated_minimal_chunks and last_error:
+            print(f"Fallo crítico: No se pudo auto-corregir el JSON de traducción tras {max_attempts} intentos.")
+            raise last_error
+        
+        # Verify chunk counts match
+        if len(translated_minimal_chunks) == len(chunks):
+            # Merge the translated Spanish texts back into the original full chunk structures (preserving words lists, etc.)
+            merged_chunks = []
+            for orig, trans in zip(chunks, translated_minimal_chunks):
+                new_chunk = dict(orig)
+                new_chunk["text"] = trans.get("text", orig.get("text"))
+                merged_chunks.append(new_chunk)
+                
             print(f"¡Éxito en traducción One-Shot! Traducidos {len(chunks)} chunks.")
             unload_model(model)
-            return translated_chunks
+            return merged_chunks
         else:
             raise ValueError(
                 f"Error en traducción One-Shot: Discrepancia en cantidad de segmentos. "
-                f"Se enviaron {len(chunks)} y se recibieron {len(translated_chunks)}."
+                f"Se enviaron {len(chunks)} y se recibieron {len(translated_minimal_chunks)}."
             )
     except OllamaCloudModelError as ve:
         raise ve

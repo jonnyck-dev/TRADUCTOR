@@ -102,78 +102,69 @@
 
         <!-- Sidebar Actions & Settings -->
         <aside class="sidebar">
-            <div class="sidebar-section">
-                <h3><i class="fa-solid fa-gears text-purple"></i> Parámetros de IA</h3>
-                
-                <div class="control-group">
-                    <label for="select-model">Modelo de Traducción (Ollama)</label>
-                    <div class="select-wrapper">
-                        <select id="select-model">
-                            <optgroup label="Modelos Locales (Ollama)">
-                                <option value="gemma4:e2b-it-qat" selected>(Recomendado) gemma4:e2b-it-qat (4B)</option>
-                                <option value="llama3.2:3b">llama3.2:3b (3B)</option>
-                                <option value="qwen3.5:2b">qwen3.5:2b (2B)</option>
-                                <option value="qwen3.5:0.8b">qwen3.5:0.8b (0.8B)</option>
-                                <option value="SetneufPT/Qwopus3.5-4B-Coder-MTP_Q4_64k_8GB-GPU:latest">Qwopus 3.5 4B</option>
-                                <option value="gemma4:12b-it-qat">gemma4:12b-it-qat (12B)</option>
-                                <option value="baytout3/qwen3.5-uncensored:4b">baytout3/qwen3.5-uncensored (4B)</option>
-                                <option value="qwen3.5:4b">qwen3.5:4b (4B)</option>
-                                <option value="qwen3.5:9b">qwen3.5:9b (9B)</option>
-                                <option value="medgemma1.5:latest">medgemma1.5 (3.3B)</option>
-                                <option value="gpt-oss:20b">gpt-oss (20B)</option>
-                            </optgroup>
-                            <optgroup label="Modelos Cloud (Requiere Suscripción)">
-                                <option value="deepseek-v4-pro:cloud">☁️ DeepSeek V4 Pro</option>
-                                <option value="deepseek-v4-flash:cloud">☁️ DeepSeek V4 Flash</option>
-                                <option value="nemotron-3-nano:30b-cloud">☁️ Nemotron 3 Nano (30B)</option>
-                                <option value="qwen3.5:cloud">☁️ Qwen 3.5 Cloud</option>
-                                <option value="gemma4:31b-cloud">☁️ Gemma 4 31B Cloud</option>
-                            </optgroup>
-                        </select>
-                        <i class="fa-solid fa-chevron-down dropdown-icon"></i>
+            <div class="sidebar-scrollable">
+                <div class="sidebar-section">
+                    <h3><i class="fa-solid fa-gears text-purple"></i> Parámetros de IA</h3>
+                    
+                    <div class="control-group">
+                        <label for="select-model">Modelo de Traducción (Ollama)</label>
+                        <div class="select-wrapper">
+                            <select id="select-model">
+                                <option value="">(Cargando modelos de Ollama...)</option>
+                            </select>
+                            <i class="fa-solid fa-chevron-down dropdown-icon"></i>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="select-speaker">Voz de Doblaje (VibeVoice)</label>
+                        <div class="select-wrapper">
+                            <select id="select-speaker">
+                                <optgroup label="Doblaje Personalizado">
+                                    <option value="cloned_speaker" selected>🗣️ Voz Clonada (Original del Video)</option>
+                                </optgroup>
+                                <optgroup label="Voces Genéricas (VibeVoice)">
+                                    <option value="en-Frank_man">(Hombre) Frank</option>
+                                    <option value="en-Carter_man">(Hombre) Carter</option>
+                                    <option value="en-Davis_man">(Hombre) Davis</option>
+                                    <option value="en-Grace_woman">(Mujer) Grace</option>
+                                    <option value="en-Emma_woman">(Mujer) Emma</option>
+                                </optgroup>
+                            </select>
+                            <i class="fa-solid fa-chevron-down dropdown-icon"></i>
+                        </div>
                     </div>
                 </div>
 
-                <div class="control-group">
-                    <label for="select-speaker">Voz de Doblaje (VibeVoice)</label>
-                    <div class="select-wrapper">
-                        <select id="select-speaker">
-                            <optgroup label="Doblaje Personalizado">
-                                <option value="cloned_speaker" selected>🗣️ Voz Clonada (Original del Video)</option>
-                            </optgroup>
-                            <optgroup label="Voces Genéricas (VibeVoice)">
-                                <option value="en-Frank_man">(Hombre) Frank</option>
-                                <option value="en-Carter_man">(Hombre) Carter</option>
-                                <option value="en-Davis_man">(Hombre) Davis</option>
-                                <option value="en-Grace_woman">(Mujer) Grace</option>
-                                <option value="en-Emma_woman">(Mujer) Emma</option>
-                            </optgroup>
-                        </select>
-                        <i class="fa-solid fa-chevron-down dropdown-icon"></i>
+                <!-- Pipeline Timers / Performance Section -->
+                <div id="timers-section" class="sidebar-section hidden">
+                    <h3><i class="fa-solid fa-stopwatch text-orange"></i> Tiempos del Pipeline</h3>
+                    <div class="timers-list" id="timers-list">
+                        <!-- Dynamic Timers Content -->
                     </div>
                 </div>
-            </div>
 
-            <div class="sidebar-section info-section">
-                <h3><i class="fa-solid fa-circle-info text-teal"></i> ¿Cómo funciona?</h3>
-                <ol class="workflow-steps">
-                    <li>
-                        <div class="step-num">1</div>
-                        <p><strong>Descarga:</strong> El servidor descarga el video original en su caché local.</p>
-                    </li>
-                    <li>
-                        <div class="step-num">2</div>
-                        <p><strong>Transcripción:</strong> <code>insanely-fast-whisper</code> genera los tiempos de voz.</p>
-                    </li>
-                    <li>
-                        <div class="step-num">3</div>
-                        <p><strong>Traducción:</strong> El modelo local de Ollama traduce el contenido manteniendo el JSON.</p>
-                    </li>
-                    <li>
-                        <div class="step-num">4</div>
-                        <p><strong>Doblaje:</strong> VibeVoice sintetiza las voces y un pipeline las sincroniza y mezcla.</p>
-                    </li>
-                </ol>
+                <div class="sidebar-section info-section">
+                    <h3><i class="fa-solid fa-circle-info text-teal"></i> ¿Cómo funciona?</h3>
+                    <ol class="workflow-steps">
+                        <li>
+                            <div class="step-num">1</div>
+                            <p><strong>Descarga:</strong> El servidor descarga el video original en su caché local.</p>
+                        </li>
+                        <li>
+                            <div class="step-num">2</div>
+                            <p><strong>Transcripción:</strong> <code>insanely-fast-whisper</code> genera los tiempos de voz.</p>
+                        </li>
+                        <li>
+                            <div class="step-num">3</div>
+                            <p><strong>Traducción:</strong> El modelo local de Ollama traduce el contenido manteniendo el JSON.</p>
+                        </li>
+                        <li>
+                            <div class="step-num">4</div>
+                            <p><strong>Doblaje:</strong> VibeVoice sintetiza las voces y un pipeline las sincroniza y mezcla.</p>
+                        </li>
+                    </ol>
+                </div>
             </div>
 
             <footer class="sidebar-footer">

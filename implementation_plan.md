@@ -30,6 +30,9 @@ Este proyecto es una aplicación web local que automatiza el proceso de traducci
    - Implementación de la función de validación `call_ollama_api` en `translator.py` con una clase de excepción dedicada `OllamaCloudModelError` para aislar fallos de JSONDecodeError.
    - Eliminación de todas las lógicas de fallback y cascadas (traducción por lotes/individuales) en `translator.py` a solicitud del usuario, configurando un modo **One-Shot 100% Exclusivo** para medir con precisión la velocidad de los modelos cloud.
    - Actualización del selector en `index.html` organizando los modelos con `<optgroup>` y añadiendo las opciones reales de tu máquina (`deepseek-v4-pro:cloud`, `deepseek-v4-flash:cloud`, `nemotron-3-nano:30b-cloud`, `qwen3.5:cloud`, `gemma4:31b-cloud`).
+9. **Registro y Visualización de Timers (Optimización)**:
+   - Medición precisa de cada fase en el backend (`process_translation_task` en `backend/main.py`) guardando los resultados en `timing_report.json` dentro del directorio de caché de la tarea.
+   - Integración visual en el frontend (`index.html`, `app.js`, `style.css`) mediante un panel interactivo con barras de progreso de colores para cada fase y resumen de duración total, permitiendo diagnosticar cuellos de botella con facilidad.
 
 ---
 
@@ -46,9 +49,19 @@ Este proyecto es una aplicación web local que automatiza el proceso de traducci
   - Si una frase es más larga que su espacio original, en lugar de acelerarla al máximo, puede "tomar prestado" tiempo del silencio del futuro (el espacio libre entre la frase actual y la siguiente).
   - La "deuda" se iría pagando retrasando ligeramente el inicio de las frases siguientes o recortando silencios futuros innecesarios, ajustando dinámicamente el timeline hasta balancear la sincronización natural sin alterar la velocidad inteligible de la voz.
 
-### 3. Evitar Colisiones de Clonación en Entornos Multiusuario (Producción)
-* **Observación**: Para simplificar las pruebas locales actuales, todas las clonaciones escriben sobre el mismo archivo estático (`cloned_speaker.wav`). En un entorno multiusuario concurrente, esto causaría que las voces de diferentes usuarios colisionen y se mezclen.
-* **Propuesta**:
-  - Reemplazar el nombre estático por el UUID de la tarea (`cloned_{task_id}.wav`).
-  - El servidor VibeVoice debe mapear dinámicamente el speaker `cloned_{task_id}` leyendo el archivo respectivo.
-  - Al completar la tarea, el pipeline debe eliminar automáticamente el archivo temporal de voz para no saturar el almacenamiento.
+### 4. Optimizaciones de Traducción y Gestión de Caché (Fase de Optimización Activa)
+* **Reducción de Temperatura (Ollama)**: Configurar la temperatura de traducción a `0.0` para que el modelo sea determinista y siga fielmente el formato JSON solicitado.
+* **Auto-Corrección Inteligente de JSON Iterativa (LLM)**: Capturar errores `JSONDecodeError` y realizar un bucle de corrección interactivo con el LLM de hasta **5 intentos**, enviándole la traza del error de sintaxis y el JSON malformado para que devuelva el fragmento corregido, garantizando que el One-Shot se rescate en caso de errores de puntuación o comillas.
+* **Corrección Programática de Comas y Comillas**:
+  - Implementar un preprocesador regex `fix_json_quotes` en [translator.py](file:///mnt/g/IA/PROYECTOS/Traductor/backend/translator.py) para escapar comillas dobles internas en strings de texto.
+  - Reparar programáticamente la falta de comas `,` entre las propiedades `"text"` y `"timestamp"`, y entre los objetos `{}` y corchetes `[]` del array de chunks en el JSON, previniendo errores de delimitador sin necesidad de reintentos con la IA.
+* **Carga Dinámica de Modelos (Ollama list)**:
+  - Crear un endpoint backend `/api/models` que consulte la API local de Ollama (`/api/tags`) o ejecute `ollama list` para obtener los modelos reales instalados.
+  - **Diagnóstico y Corrección de Bloqueo (Completado)**: Se diagnosticó que al lanzar el servidor backend desde el entorno WSL hacia el host de Windows mediante `cmd.exe /c "run.bat"`, la falta de redirección de entrada estándar (`< /dev/null`) causaba que el proceso de Windows se suspendiera esperando entrada (stdin), impidiendo que levantara el servidor en el puerto 8000. Además, de forma preventiva, se configuró `stdin=subprocess.DEVNULL` en la llamada a `subprocess.run(["ollama", "list"])` en `main.py` para asegurar que las llamadas internas al CLI de Ollama nunca se congelen.
+  - Actualizar el dropdown del frontend (`select-model`) para agrupar dinámicamente los modelos en locales y cloud según su etiqueta, eliminando nombres hardcodeados.
+* **Compresión y Fusión de Chunks (Extract & Merge)**:
+  - En lugar de enviar la estructura completa de WhisperX (que contiene arrays de palabras detalladas con sus timestamps individuales), el backend extraerá un JSON minimalista que contenga únicamente `"text"` y `"timestamp"` para cada frase.
+  - Esto ahorra un ~70% de tokens de contexto, acelera la traducción en Ollama y elimina errores de sintaxis causados por el volumen de datos.
+  - Una vez traducido, el backend fusionará la traducción en español de vuelta al JSON completo original de WhisperX segmentado, sobreescribiendo el campo `"text"` y preservando intactos los arrays `"words"`.
+* **Subdirectorio de Separación de Audio en Caché**:
+  - Crear la carpeta dedicada `audio_separation` en el directorio de caché de cada tarea para almacenar los stems de Demucs (`vocals.wav`, `no_vocals.wav`, etc.), manteniendo el espacio ordenado junto a `downloads`, `whisper` y `tts`.
