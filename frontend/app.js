@@ -291,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
             case 'transcribing':
                 processTitle.textContent = 'Transcribiendo Audio';
-                processDesc.textContent = 'Ejecutando insanely-fast-whisper en inglés...';
+                processDesc.textContent = 'Ejecutando WhisperX en inglés...';
                 statusText = 'Transcribiendo...';
                 statusDotColor = '#f59e0b';
                 break;
@@ -303,7 +303,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
             case 'synthesizing':
                 processTitle.textContent = 'Sintetizando Voz';
-                processDesc.textContent = 'Generando audio doblado al español con VibeVoice...';
+                processDesc.textContent = selectSpeaker.value === 'windows_native' 
+                    ? 'Generando audio doblado al español con TTS Nativo de Windows...' 
+                    : 'Generando audio doblado al español con VibeVoice...';
                 statusText = 'Generando TTS...';
                 statusDotColor = '#d946ef';
                 break;
@@ -411,7 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
             "1b_demucs_separation": { name: "Separación Vocal (Demucs)", icon: "fa-scissors", color: "#60a5fa" },
             "2_transcription": { name: "Transcripción (WhisperX)", icon: "fa-closed-captioning", color: "#f59e0b" },
             "3_translation": { name: "Traducción (Ollama)", icon: "fa-language", color: "#8b5cf6" },
-            "4_tts_synthesis": { name: "Doblaje (VibeVoice)", icon: "fa-microphone", color: "#d946ef" },
+            "4_tts_synthesis": { name: selectSpeaker.value === 'windows_native' ? "Doblaje (Windows TTS)" : "Doblaje (VibeVoice)", icon: "fa-microphone", color: "#d946ef" },
             "5_synchronization": { name: "Sincronización Temporal", icon: "fa-clock", color: "#06b6d4" },
             "5b_audio_mixing": { name: "Mezcla de Audio", icon: "fa-sliders", color: "#14b8a6" },
             "6_video_merging": { name: "Ensamble de Video", icon: "fa-film", color: "#10b981" },

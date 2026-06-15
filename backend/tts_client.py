@@ -120,13 +120,21 @@ def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-
             raise RuntimeError(f"Task {task_id} stopped by user.")
             
         if speaker_name == "windows_native":
-            # ponytail: use PowerShell native Speech Synthesizer for instant robotic TTS
+            # ponytail: use PowerShell native Speech Synthesizer with Spanish voice auto-selection
             print(f"Using Windows native Speech Synthesizer for phrase {idx}/{len(chunks)-1}")
             try:
                 clean_text = text.replace('"', "'").replace("\n", " ").strip()
                 ps_text = clean_text.replace("'", "''")
                 win_output_wav = wsl_to_windows_path(generated_wav)
-                ps_cmd = f"Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $synth.SetOutputToWaveFile('{win_output_wav}'); $synth.Speak('{ps_text}'); $synth.Dispose()"
+                ps_cmd = (
+                    "Add-Type -AssemblyName System.Speech; "
+                    "$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                    "$voice = $synth.GetInstalledVoices() | ForEach-Object { $_.VoiceInfo } | Where-Object { $_.Culture.Name -like 'es-*' } | Select-Object -First 1; "
+                    "if ($voice) { $synth.SelectVoice($voice.Name) }; "
+                    f"$synth.SetOutputToWaveFile('{win_output_wav}'); "
+                    f"$synth.Speak('{ps_text}'); "
+                    "$synth.Dispose()"
+                )
                 result = subprocess.run(
                     ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
                     stdin=subprocess.DEVNULL,
