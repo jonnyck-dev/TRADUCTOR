@@ -3,6 +3,11 @@ import os
 import json
 
 def wsl_to_windows_path(wsl_path: str) -> str:
+    if wsl_path.startswith('/mnt/'):
+        parts = wsl_path.split('/')
+        drive = parts[2].upper()
+        remaining = '\\'.join(parts[3:])
+        return f"{drive}:\\{remaining}"
     if os.name == 'nt':
         return os.path.abspath(wsl_path)
     wsl_path = os.path.abspath(wsl_path)
@@ -11,11 +16,6 @@ def wsl_to_windows_path(wsl_path: str) -> str:
         return result.stdout.strip()
     except Exception as e:
         print(f"Error converting path {wsl_path} with wslpath: {e}")
-        if wsl_path.startswith('/mnt/'):
-            parts = wsl_path.split('/')
-            drive = parts[2].upper()
-            remaining = '\\'.join(parts[3:])
-            return f"{drive}:\\{remaining}"
         return wsl_path
 
 def transcribe_audio(audio_path: str, output_json_path: str, language: str = "English", model_name: str = "openai/whisper-tiny") -> dict:

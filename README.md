@@ -62,7 +62,7 @@ graph TD
    ```cmd
    setup_symlinks.bat
    ```
-   *Esto vinculará las dependencias de `VibeVoice` y `superfastWHISPER` al backend del proyecto.*
+   *Esto vinculará las dependencias de `VibeVoice` y `Demucs` (UVR5-UI) al backend del proyecto.*
 
 3. **Configurar Entorno Virtual e Instalar dependencias**:
    Ejecuta el asistente:

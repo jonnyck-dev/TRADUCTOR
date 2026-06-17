@@ -18,5 +18,8 @@ echo   Presiona Ctrl+C en esta ventana para apagar el servidor.
 echo =======================================================
 echo.
 
+:: Para cambiar el modelo de VibeVoice al de 0.5B (Realtime), descomenta la siguiente linea:
+:: set VIBEVOICE_MODEL=VibeVoice-Realtime-0.5B
+
 python backend\main.py
 pause

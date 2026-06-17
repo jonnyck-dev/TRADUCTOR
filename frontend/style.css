@@ -763,3 +763,11 @@ video {
     color: var(--accent-teal);
     text-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
 }
+
+/* Flex utilities for labels */
+.flex {
+    display: flex;
+}
+.justify-between {
+    justify-content: space-between;
+}

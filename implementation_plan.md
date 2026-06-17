@@ -29,48 +29,76 @@ Este proyecto es una aplicación web local que automatiza el proceso de traducci
 8. **Detección y Advertencia de Modelos Cloud (Ollama)**:
    - Implementación de la función de validación `call_ollama_api` en `translator.py` con una clase de excepción dedicada `OllamaCloudModelError` para aislar fallos de JSONDecodeError.
    - Eliminación de todas las lógicas de fallback y cascadas (traducción por lotes/individuales) en `translator.py` a solicitud del usuario, configurando un modo **One-Shot 100% Exclusivo** para medir con precisión la velocidad de los modelos cloud.
-   - Actualización del selector en `index.html` organizando los modelos con `<optgroup>` y añadiendo las opciones reales de tu máquina (`deepseek-v4-pro:cloud`, `deepseek-v4-flash:cloud`, `nemotron-3-nano:30b-cloud`, `qwen3.5:cloud`, `gemma4:31b-cloud`).
+   - Actualización del selector en `index.html` organizando los modelos con `<optgroup>` y añadiendo las opciones reales de tu máquina.
 9. **Registro y Visualización de Timers (Optimización)**:
    - Medición precisa de cada fase en el backend (`process_translation_task` en `backend/main.py`) guardando los resultados en `timing_report.json` dentro del directorio de caché de la tarea.
    - Integración visual en el frontend (`index.html`, `app.js`, `style.css`) mediante un panel interactivo con barras de progreso de colores para cada fase y resumen de duración total, permitiendo diagnosticar cuellos de botella con facilidad.
 
 ---
+
 ## 🎯 Plan de Optimización de Rendimiento y Correcciones Activas
 
-### 1. Persistencia Completa de VibeVoice en VRAM (Optimización de TTS) (Completado)
-* **Problema**: El pipeline actual de VibeVoice es lento porque los hilos individuales de procesamiento de frases pinguen al servidor con un timeout extremadamente corto (0.5s). Bajo carga de GPU/CPU, esta consulta falla por retraso y los hilos caen de vuelta a ejecutar el script independiente `python demo/inference_from_file.py`, lo que fuerza a cargar y descargar el modelo de 1.5B en VRAM para cada frase individual.
-* **Solución**:
-  - Refactorear `backend/tts_client.py` para evaluar la disponibilidad del servidor VibeVoice (`use_server = True`) una sola vez al inicio de `generate_individual_tts` tras levantar el proceso del servidor.
-  - Eliminar los pings por frase/hilo en `process_chunk`, forzando el uso exclusivo del servidor persistente.
-  - Esto garantiza que el modelo se cargue una sola vez en VRAM y permanezca activo hasta procesar la última frase del video.
-  - **Resultado**: VibeVoice evalúa `use_server` al inicio, evitando fallbacks innecesarios a subprocess y manteniendo el modelo cargado en la VRAM de forma persistente.
+### 1. Generación por Lotes (Batch) de TTS VibeVoice (En Progreso)
+- **Problema**: La generación individual de cada frase mediante VibeVoice tarda demasiado (~14 minutos para un video de 20 minutos) debido a los overheads de arranque de síntesis.
+- **Solución**:
+  - Agrupar frases en bloques contiguos de 5.
+  - Generar el audio completo del lote (`batch_{batch_idx}_raw.wav`) en una única llamada al servidor VibeVoice.
+  - Ejecutar WhisperX en el audio del lote para obtener los tiempos exactos de inicio y fin de cada palabra en español.
+  - Alinear las 5 frases originales con las palabras de WhisperX y segmentar el lote en archivos `phrase_{idx}.mp3` individuales con un pequeño margen de 0.05s.
+  - Implementar un fallback proporcional en caso de que WhisperX devuelva timestamps vacíos o incompletos.
 
-### 2. Doblaje Rápido: Fallback a TTS Nativo de Windows (Completado)
-* **Problema**: Para pruebas rápidas o desarrollo, el flujo de VibeVoice (con clonación o síntesis profunda) puede tomar demasiado tiempo en videos largos.
-* **Solución**:
-  - Implementar un motor de síntesis de voz nativo en `backend/tts_client.py` que utilice PowerShell (`Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $synth.SetOutputToWaveFile(...)`) para generar el audio de forma instantánea.
-  - Mapear la voz `windows_native` en el dropdown del frontend (`frontend/index.html`) para que el usuario pueda elegir doblaje rápido robótico.
-  - **Resultado**: Integración funcional utilizando el sintetizador nativo de Windows vía PowerShell de forma instantánea, eludiendo la inicialización de VibeVoice y acelerando la generación.
+### 2. Selección de Modelo, CFG y Steps en la UI (Completado)
+- **Control de Parámetros en UI**:
+  - Se añade un selector de modelo VibeVoice (`VibeVoice-1.5B` estándar y `VibeVoice-Realtime-0.5B` de streaming).
+  - Se implementan controles deslizantes (range sliders) para ajustar en tiempo real el valor de **CFG Scale** (de 1.0 a 3.0) y de **Pasos DDPM / Steps** (de 5 a 50).
+- **Integración con Backend**:
+  - El frontend (`app.js`) lee y envía los valores elegidos al iniciar el pipeline (`/api/process`).
+  - La API de FastAPI (`main.py`) recibe los parámetros y los propaga al cliente de TTS (`generate_individual_tts` en `tts_client.py`).
+  - El servidor local de VibeVoice recibe los parámetros en la petición `/api/tts` y los aplica dinámicamente antes de iniciar la generación llamando a `model.set_ddpm_inference_steps(request.ddpm_steps)` e inyectando `cfg_scale=request.cfg_scale` en la generación autoregresiva.
 
-### 3. Corrección del Bug de Separación de Audio (UVR5-UI) (Completado)
-* **Problema**: La carpeta `audio_separation` queda vacía en Windows porque la ruta del ejecutable de Python de UVR5-UI está hardcodeada a `env/Scripts/python.exe`, pero en algunas instalaciones el ejecutable se encuentra directamente en `env/python.exe`.
-* **Solución**:
-  - Modificar `backend/audio_processor.py` para buscar el ejecutable en `env/Scripts/python.exe` y, si no existe, retroceder a `env/python.exe`.
-  - **Resultado**: Se incorporó la ruta de fallback en `audio_processor.py` resolviendo el fallo silencioso al separar pistas.
+### 3. Visualización y Detalles del Paso Demucs (Completado)
+- **Problema**: El paso de separación vocal por Demucs se ejecuta en la GPU en segundo plano pero no tiene visibilidad en la interfaz de usuario, haciendo parecer que el proceso se detiene en "Descargando video".
+- **Solución**:
+  - Se añade un estado de tarea `"separating"` en el backend (`main.py`) justo antes de llamar a `run_demucs_separation` estableciendo el progreso en 25%.
+  - El frontend (`app.js`) maneja este nuevo estado y actualiza el título del diálogo a "Separando Voces (Demucs)", la descripción a "Separando el speaker del fondo usando Demucs offline (Aceleración GPU)..." y el color del indicador.
+  - Se añade el paso detallado de separación vocal de Demucs en la sección explicativa "¿Cómo funciona?" de `index.html`.
 
-### 4. Optimizaciones de Traducción y Gestión de Caché (Fase de Optimización Activa)
-* **Reducción de Temperatura (Ollama)**: Configurar la temperatura de traducción a `0.0` para que el modelo sea determinista y siga fielmente el formato JSON solicitado.
-* **Auto-Corrección Inteligente de JSON Iterativa (LLM)**: Capturar errores `JSONDecodeError` y realizar un bucle de corrección interactivo con el LLM de hasta **5 intentos**, enviándole la traza del error de sintaxis y el JSON malformado para que devuelva el fragmento corregido, garantizando que el One-Shot se rescate en caso de errores de puntuación o comillas.
-* **Corrección Programática de Comas y Comillas**:
-  - Implementar un preprocesador regex `fix_json_quotes` en [translator.py](file:///mnt/g/IA/PROYECTOS/Traductor/backend/translator.py) para escapar comillas dobles internas en strings de texto.
-  - Reparar programáticamente la falta de comas `,` entre las propiedades `"text"` y `"timestamp"`, y entre los objetos `{}` y corchetes `[]` del array de chunks en el JSON, previniendo errores de delimitador sin necesidad de reintentos con la IA.
-* **Carga Dinámica de Modelos (Ollama list)**:
-  - Crear un endpoint backend `/api/models` que consulte la API local de Ollama (`/api/tags`) o ejecute `ollama list` para obtener los modelos reales instalados.
-  - **Diagnóstico y Corrección de Bloqueo (Completado)**: Se diagnosticó que al lanzar el servidor backend desde el entorno WSL hacia el host de Windows mediante `cmd.exe /c "run.bat"`, la falta de redirección de entrada estándar (`< /dev/null`) causaba que el proceso de Windows se suspendiera esperando entrada (stdin), impidiendo que levantara el servidor en el puerto 8000. Además, de forma preventiva, se configuró `stdin=subprocess.DEVNULL` en la llamada a `subprocess.run(["ollama", "list"])` en `main.py` para asegurar que las llamadas internas al CLI de Ollama nunca se congelen.
-  - Actualizar el dropdown del frontend (`select-model`) para agrupar dinámicamente los modelos en locales y cloud según su etiqueta, eliminando nombres hardcodeados.
-* **Compresión y Fusión de Chunks (Extract & Merge)**:
-  - En lugar de enviar la estructura completa de WhisperX (que contiene arrays de palabras detalladas con sus timestamps individuales), el backend extraerá un JSON minimalista que contenga únicamente `"text"` y `"timestamp"` para cada frase.
-  - Esto ahorra un ~70% de tokens de contexto, acelera la traducción en Ollama y elimina errores de sintaxis causados por el volumen de datos.
-  - Una vez traducido, el backend fusionará la traducción en español de vuelta al JSON completo original de WhisperX segmentado, sobreescribiendo el campo `"text"` y preservando intactos los arrays `"words"`.
-* **Subdirectorio de Separación de Audio en Caché**:
-  - Crear la carpeta dedicada `audio_separation` en el directorio de caché de cada tarea para almacenar los stems de Demucs (`vocals.wav`, `no_vocals.wav`, etc.), manteniendo el espacio ordenado junto a `downloads`, `whisper` y `tts`.
+### 4. Guardado de Chunks Simplificados (english_minimal.json / spanish_minimal.json) (Completado)
+- **Problema**: El procesamiento en memoria de la simplificación de chunks de transcripción ("Compress & Merge") es óptimo en velocidad y memoria, pero no deja archivos intermedios legibles en disco para que el usuario analice el texto enviado y devuelto por el LLM.
+- **Solución**:
+  - Se modifica `translate_chunks` en `translator.py` para aceptar un argumento opcional `save_dir`.
+  - Si se proporciona `save_dir`, la función guarda de manera paralela en disco:
+    - `english_minimal.json`: los textos e intervalos de tiempo limpios (sin `words`) enviados al modelo.
+    - `spanish_minimal.json`: las traducciones en bruto devueltas por Ollama antes de fusionarse con los tiempos a nivel de palabra originales.
+  - Se propaga el `whisper_dir` desde `main.py` al llamar a `translate_chunks`.
+
+### 5. Traducción con Preservación de Índices y Auto-Recuperación Focalizada (Completado)
+- **Problema**: Al traducir cientos de chunks en un solo bloque (One-Shot), el LLM a veces combina o salta pequeños fragmentos (por ejemplo, devolviendo 312 traducciones para 314 chunks originales). Esto genera una discrepancia de tamaños que hace fallar la sincronización.
+- **Solución**:
+  - Se añade una clave `"index"` correlativa (0, 1, 2...) a cada chunk enviado en el payload de traducción (`english_minimal.json`).
+  - Se actualiza el prompt del sistema para ordenar al LLM que no combine ni omita chunks y que devuelva exactamente los mismos índices.
+  - Al recibir la traducción, se parsean los índices recibidos y se mapean en un diccionario.
+  - Si faltan índices, el backend identifica cuáles faltan y realiza de manera automática una traducción rápida e individual de esos fragmentos faltantes con Ollama.
+  - Se reconstruye la lista ordenada completa a partir de los índices recuperados, garantizando un tamaño final de salida idéntico al de entrada (100% de éxito en la sincronización).
+
+### 6. Verdadero Paralelismo con Múltiples Servidores VibeVoice (Procesos Independientes) (En Progreso)
+- **Problema**:
+  - Al quitar el `lock` en el endpoint `/api/tts` de un único proceso de VibeVoice, múltiples hilos ejecutan `model.generate()` de manera concurrente en la misma instancia del modelo en GPU. Esto corrompe los KV-caches, estados y masks internos de PyTorch, causando palabras repetidas, silencios, y una alta contención que eleva el tiempo a 2800 segundos.
+  - Si se usa un lock en un solo proceso, la generación es secuencial y extremadamente lenta.
+- **Solución**:
+  - **Múltiples Puertos y Procesos**: Modificar `vibevoice_server.py` para aceptar un parámetro `--port`, añadir el `with lock:` de vuelta a nivel de endpoint, y llamar a `torch.cuda.empty_cache()` para liberar memoria activamente.
+  - **Dynamic Workers (VRAM Safe < 10GB)**: En `tts_client.py`, determinar el número de procesos servidores a levantar para no superar los 10 GB de VRAM (incluyendo el sistema operativo y navegador):
+    - `0.5B Streaming`: 3 procesos independientes (puertos 8001-8003). Consume ~5.4 GB de VibeVoice + ~2 GB del sistema/pantalla = ~7.4 GB VRAM total.
+    - `1.5B Standard`: 1 proceso (puerto 8001). Consume ~4.2 GB de VibeVoice + ~2 GB del sistema/pantalla = ~6.2 GB VRAM total.
+  - **Balanceo en Pool de Hilos**: Distribuir las peticiones de síntesis entre los puertos activos de forma balanceada usando un pool de conexiones/puertos disponibles o round-robin.
+  - **Parada Limpia**: Asegurar que al finalizar la tarea o cancelarla, se detengan todos los subprocesos en todos los puertos iniciados.
+
+### 7. Formateo Dinámico de Textos según Arquitectura de Modelo (En Progreso)
+- **Problema**:
+  - En `vibevoice_server.py`, el texto enviado al modelo se formatea anteponiendo `"Speaker 1: "`. 
+  - Para el modelo **0.5B Streaming**, esto causa que la voz lea literalmente "Speaker 1" al inicio de algunas frases debido a su menor escala y distinta sensibilidad al formato del prompt.
+  - Para el modelo **1.5B Standard**, el formato `"Speaker 1: "` es estrictamente requerido por su arquitectura para alinear correctamente los pesos del locutor.
+- **Solución**:
+  - Implementar un **formateo dinámico** en `vibevoice_server.py` utilizando la bandera `is_streaming`:
+    - Si `is_streaming` es `True` (0.5B): Se remueve el prefijo y se envía texto plano (`f"{request.text}\n"`).
+    - Si `is_streaming` es `False` (1.5B): Se mantiene el prefijo `"Speaker 1: {request.text}\n"`.

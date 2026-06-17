@@ -43,6 +43,9 @@ class ProcessRequest(BaseModel):
     url: str
     model: str = "gemma4:e2b-it-qat"
     speaker: str = "en-Frank_man"
+    vibevoice_model: str = "VibeVoice-1.5B"
+    vibevoice_cfg: float = 1.3
+    vibevoice_steps: int = 10
 
 def preprocess_chunks(chunks: list) -> list:
     """
@@ -304,7 +307,7 @@ def prepare_cloned_voice(audio_path: str, whisper_json_path: str):
         print(f"Error al preparar la voz clonada: {e}")
         traceback.print_exc()
 
-def process_translation_task(task_id: str, url: str, model: str, speaker: str):
+def process_translation_task(task_id: str, url: str, model: str, speaker: str, vibevoice_model: str = None, vibevoice_cfg: float = 1.3, vibevoice_steps: int = 10):
     import time
     start_task_time = time.time()
     step_times = {}
@@ -333,6 +336,8 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str):
         
         # 1b. Run Demucs separation to get vocals.wav and no_vocals.wav (with fallback)
         t0 = time.time()
+        tasks[task_id]["status"] = "separating"
+        tasks[task_id]["progress"] = 25
         vocals_wav_path, background_wav_path = run_demucs_separation(audio_path, audio_sep_dir)
         step_times["1b_demucs_separation"] = time.time() - t0
         
@@ -369,7 +374,7 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str):
                 translated_data = json.load(f)
             translated_chunks = translated_data.get("chunks", [])
         else:
-            translated_chunks = translate_chunks(preprocessed_chunks, model=model)
+            translated_chunks = translate_chunks(preprocessed_chunks, model=model, save_dir=whisper_dir)
             translated_data = {
                 "text": " ".join([c.get("text", "") for c in translated_chunks]),
                 "chunks": translated_chunks
@@ -385,7 +390,15 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str):
         if speaker == "cloned_speaker":
             # Extract 1 minute sample from clean vocals wav instead of noisy original audio
             prepare_cloned_voice(vocals_wav_path, orig_json_path)
-        mp3_paths = generate_individual_tts(translated_chunks, tts_dir, speaker_name=speaker, task_id=task_id)
+        mp3_paths = generate_individual_tts(
+            translated_chunks, 
+            tts_dir, 
+            speaker_name=speaker, 
+            task_id=task_id,
+            vibevoice_model=vibevoice_model,
+            vibevoice_cfg=vibevoice_cfg,
+            vibevoice_steps=vibevoice_steps
+        )
         step_times["4_tts_synthesis"] = time.time() - t0
         
         # 5. Overlay, synchronize and speed up chunks (Splicing, stretching and overlaying)
@@ -511,7 +524,10 @@ def process_video(request: ProcessRequest, background_tasks: BackgroundTasks):
         task_id,
         request.url,
         request.model,
-        request.speaker
+        request.speaker,
+        request.vibevoice_model,
+        request.vibevoice_cfg,
+        request.vibevoice_steps
     )
     return {"task_id": task_id}
 

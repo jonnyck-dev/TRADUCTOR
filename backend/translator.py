@@ -1,6 +1,7 @@
 import requests
 import json
 import re
+import os
 
 class OllamaCloudModelError(Exception):
     """Exception raised when an Ollama cloud model is not found or has subscription issues."""
@@ -60,25 +61,36 @@ def fix_json_quotes(json_str: str) -> str:
     pattern = r'("text"\s*:\s*")(.*?)((?<!\\)"\s*,?\s*(?<!\\)"timestamp"|\s*\})'
     return re.sub(pattern, replace_quote, json_str, flags=re.DOTALL)
 
-def translate_chunks(chunks: list, model: str = "gemma4:e2b-it-qat") -> list:
+def translate_chunks(chunks: list, model: str = "gemma4:e2b-it-qat", save_dir: str = None) -> list:
     url = "http://127.0.0.1:11434/api/chat"
     system_msg = (
         "You are an expert English to Spanish translator. "
         "You will receive a JSON object with 'chunks' containing English text. "
         "Translate the 'text' of each chunk to natural, fluent Spanish. "
-        "Keep the exact 'timestamp' values. "
+        "Keep the exact 'timestamp' and 'index' values. Do not omit, combine, or split chunks. "
         "Return the resulting JSON object with the translated 'chunks' and nothing else."
     )
     
     print(f"\n--- Iniciando traducción de {len(chunks)} chunks con {model} (Modo One-Shot Exclusivo + Optimizados) ---")
     
-    # Compress chunks: extract only text and timestamp (skip detailed words array to save tokens and prevent LLM syntax confusion)
+    # Compress chunks: extract text, timestamp, and index
     minimal_chunks = []
-    for c in chunks:
+    for idx, c in enumerate(chunks):
         minimal_chunks.append({
+            "index": idx,
             "text": c.get("text", ""),
             "timestamp": c.get("timestamp", [0.0, 0.0])
         })
+        
+    if save_dir:
+        try:
+            os.makedirs(save_dir, exist_ok=True)
+            min_input_path = os.path.join(save_dir, "english_minimal.json")
+            with open(min_input_path, "w", encoding="utf-8") as f:
+                json.dump({"chunks": minimal_chunks}, f, ensure_ascii=False, indent=2)
+            print(f"Saved simplified English input to disk: {min_input_path}")
+        except Exception as se:
+            print(f"Warning: Failed to save english_minimal.json: {se}")
         
     payload = {
         "model": model,
@@ -97,8 +109,8 @@ def translate_chunks(chunks: list, model: str = "gemma4:e2b-it-qat") -> list:
     
     try:
         print("Enviando chunks minimalistas en un solo query (One-Shot)...")
-        # One-shot timeout set to 300 seconds (5 minutes)
-        result = call_ollama_api(url, payload, timeout=300)
+        # One-shot timeout set to 900 seconds (15 minutes)
+        result = call_ollama_api(url, payload, timeout=900)
         content = result.get("message", {}).get("content", "").strip()
         
         # Clean think tags
@@ -191,24 +203,93 @@ def translate_chunks(chunks: list, model: str = "gemma4:e2b-it-qat") -> list:
         if not translated_minimal_chunks and last_error:
             print(f"Fallo crítico: No se pudo auto-corregir el JSON de traducción tras {max_attempts} intentos.")
             raise last_error
+            
+        if save_dir and translated_minimal_chunks:
+            try:
+                min_output_path = os.path.join(save_dir, "spanish_minimal.json")
+                with open(min_output_path, "w", encoding="utf-8") as f:
+                    json.dump({"chunks": translated_minimal_chunks}, f, ensure_ascii=False, indent=2)
+                print(f"Saved raw translated Spanish output to disk: {min_output_path}")
+            except Exception as se:
+                print(f"Warning: Failed to save spanish_minimal.json: {se}")
         
-        # Verify chunk counts match
-        if len(translated_minimal_chunks) == len(chunks):
-            # Merge the translated Spanish texts back into the original full chunk structures (preserving words lists, etc.)
-            merged_chunks = []
-            for orig, trans in zip(chunks, translated_minimal_chunks):
-                new_chunk = dict(orig)
-                new_chunk["text"] = trans.get("text", orig.get("text"))
-                merged_chunks.append(new_chunk)
-                
-            print(f"¡Éxito en traducción One-Shot! Traducidos {len(chunks)} chunks.")
-            unload_model(model)
-            return merged_chunks
-        else:
-            raise ValueError(
-                f"Error en traducción One-Shot: Discrepancia en cantidad de segmentos. "
-                f"Se enviaron {len(chunks)} y se recibieron {len(translated_minimal_chunks)}."
-            )
+        # Map translated chunks by index with positioning fallback
+        translated_by_index = {}
+        for i, c in enumerate(translated_minimal_chunks):
+            idx = c.get("index")
+            if idx is None:
+                idx = i
+            try:
+                idx = int(idx)
+            except:
+                idx = i
+            translated_by_index[idx] = c
+            
+        # Find any missing indices
+        missing_indices = [idx for idx in range(len(chunks)) if idx not in translated_by_index]
+        
+        if missing_indices:
+            print(f"Discrepancia detectada: Faltan {len(missing_indices)} segmentos por traducir. Iniciando auto-recuperación individual...")
+            for idx in missing_indices:
+                orig_chunk = chunks[idx]
+                orig_text = orig_chunk.get("text", "").strip()
+                if not orig_text:
+                    translated_by_index[idx] = {
+                        "index": idx,
+                        "text": "",
+                        "timestamp": orig_chunk.get("timestamp", [0.0, 0.0])
+                    }
+                    continue
+                    
+                # Direct single-phrase translation prompt
+                chunk_prompt = f"Translate the following English sentence to natural, fluent Spanish. Return ONLY the translated Spanish text and nothing else:\n\n{orig_text}"
+                single_payload = {
+                    "model": model,
+                    "messages": [
+                        {"role": "user", "content": chunk_prompt}
+                    ],
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.0
+                    }
+                }
+                try:
+                    single_res = call_ollama_api(url, single_payload, timeout=60)
+                    translated_text = single_res.get("message", {}).get("content", "").strip()
+                    if "<think>" in translated_text:
+                        translated_text = re.sub(r'<think>.*?</think>', '', translated_text, flags=re.DOTALL).strip()
+                    if translated_text.startswith('"') and translated_text.endswith('"'):
+                        translated_text = translated_text[1:-1].strip()
+                        
+                    translated_by_index[idx] = {
+                        "index": idx,
+                        "text": translated_text,
+                        "timestamp": orig_chunk.get("timestamp", [0.0, 0.0])
+                    }
+                    print(f"-> Recuperado índice {idx}: '{orig_text}' -> '{translated_text}'")
+                except Exception as se_err:
+                    print(f"Error recuperando índice {idx}: {se_err}. Usando texto original en inglés.")
+                    translated_by_index[idx] = {
+                        "index": idx,
+                        "text": orig_text,
+                        "timestamp": orig_chunk.get("timestamp", [0.0, 0.0])
+                    }
+                    
+        # Reconstruct the complete ordered translated chunks list
+        reconstructed_chunks = []
+        for idx in range(len(chunks)):
+            reconstructed_chunks.append(translated_by_index[idx])
+            
+        # Merge the translated Spanish texts back into the original full chunk structures
+        merged_chunks = []
+        for orig, trans in zip(chunks, reconstructed_chunks):
+            new_chunk = dict(orig)
+            new_chunk["text"] = trans.get("text", orig.get("text"))
+            merged_chunks.append(new_chunk)
+            
+        print(f"¡Éxito en traducción One-Shot! Traducidos y alineados {len(chunks)} chunks.")
+        unload_model(model)
+        return merged_chunks
     except OllamaCloudModelError as ve:
         raise ve
     except Exception as e:

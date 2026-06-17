@@ -10,6 +10,19 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const selectModel = document.getElementById('select-model');
     const selectSpeaker = document.getElementById('select-speaker');
+    const selectVibevoiceModel = document.getElementById('select-vibevoice-model');
+    const inputVibevoiceCfg = document.getElementById('input-vibevoice-cfg');
+    const inputVibevoiceSteps = document.getElementById('input-vibevoice-steps');
+    const valVibevoiceCfg = document.getElementById('val-vibevoice-cfg');
+    const valVibevoiceSteps = document.getElementById('val-vibevoice-steps');
+
+    // Update range slider labels on input
+    inputVibevoiceCfg.addEventListener('input', () => {
+        valVibevoiceCfg.textContent = inputVibevoiceCfg.value;
+    });
+    inputVibevoiceSteps.addEventListener('input', () => {
+        valVibevoiceSteps.textContent = inputVibevoiceSteps.value;
+    });
     
     const chkUseCache = document.getElementById('chk-use-cache');
     const cacheSelectWrapper = document.getElementById('cache-select-wrapper');
@@ -197,7 +210,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const payload = {
             url: url,
             model: selectModel.value,
-            speaker: selectSpeaker.value
+            speaker: selectSpeaker.value,
+            vibevoice_model: selectVibevoiceModel.value,
+            vibevoice_cfg: parseFloat(inputVibevoiceCfg.value),
+            vibevoice_steps: parseInt(inputVibevoiceSteps.value)
         };
 
         // Reset view states
@@ -315,6 +331,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 processDesc.textContent = 'Descargando desde YouTube en el servidor...';
                 statusText = 'Descargando...';
                 statusDotColor = '#3b82f6';
+                break;
+            case 'separating':
+                processTitle.textContent = 'Separando Voces (Demucs)';
+                processDesc.textContent = 'Separando el speaker del fondo usando Demucs offline (Aceleración GPU)...';
+                statusText = 'Separando voces...';
+                statusDotColor = '#60a5fa';
                 break;
             case 'transcribing':
                 processTitle.textContent = 'Transcribiendo Audio';

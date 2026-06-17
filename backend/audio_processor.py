@@ -460,8 +460,11 @@ def run_demucs_separation(audio_path: str, output_dir: str) -> tuple[str, str]:
     import ast
     from whisper_client import wsl_to_windows_path
     
-    # Path to UVR5-UI
-    uvr5_dir = "/mnt/d/documentos/descargas/Audio/IA/AUDIO ANALIZER/separacion de audio/UVR5-UI-v1.8.4/UVR5-UI"
+    # Path to UVR5-UI via symlink (resolved for cross-platform WSL/Windows)
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    uvr5_dir = os.path.join(base_dir, "backend", "demucs")
+    if os.path.islink(uvr5_dir):
+        uvr5_dir = os.path.realpath(uvr5_dir)
     python_exe = os.path.join(uvr5_dir, "env", "Scripts", "python.exe")
     # ponytail: fallback to env/python.exe if env/Scripts/python.exe does not exist
     if not os.path.exists(python_exe):
