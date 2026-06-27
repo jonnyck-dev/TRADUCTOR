@@ -240,8 +240,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnProcessStudio = document.getElementById('btn-process-studio');
     if (btnProcessStudio) {
         btnProcessStudio.addEventListener('click', () => {
-            openStudioOnLoad = true;
-            btnProcess.click();
+            if (chkUseCache.checked && selectCache.value) {
+                currentTaskId = selectCache.value;
+                if (typeof openStudioView === 'function') {
+                    openStudioView();
+                } else {
+                    document.getElementById('btn-open-studio').click();
+                }
+            } else {
+                openStudioOnLoad = true;
+                btnProcess.click();
+            }
         });
     }
 
