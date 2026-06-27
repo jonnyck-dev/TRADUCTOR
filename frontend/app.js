@@ -15,6 +15,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const inputVibevoiceSteps = document.getElementById('input-vibevoice-steps');
     const valVibevoiceCfg = document.getElementById('val-vibevoice-cfg');
     const valVibevoiceSteps = document.getElementById('val-vibevoice-steps');
+    const inputBatchSize = document.getElementById('input-batch-size');
+    const valBatchSize = document.getElementById('val-batch-size');
+    const inputSyncSize = document.getElementById('input-sync-size');
+    const valSyncSize = document.getElementById('val-sync-size');
+    const selectTtsMode = document.getElementById('select-tts-mode');
+    const batchSizeGroup = document.getElementById('batch-size-group');
+    const syncSizeGroup = document.getElementById('sync-size-group');
 
     // Update range slider labels on input
     inputVibevoiceCfg.addEventListener('input', () => {
@@ -22,6 +29,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     inputVibevoiceSteps.addEventListener('input', () => {
         valVibevoiceSteps.textContent = inputVibevoiceSteps.value;
+    });
+    inputBatchSize.addEventListener('input', () => {
+        valBatchSize.textContent = inputBatchSize.value;
+    });
+    inputSyncSize.addEventListener('input', () => {
+        valSyncSize.textContent = inputSyncSize.value;
+    });
+    
+    // Toggle batch size and sync size visibility based on TTS mode
+    selectTtsMode.addEventListener('change', () => {
+        if (selectTtsMode.value === 'oneshot') {
+            batchSizeGroup.style.display = 'none';
+            syncSizeGroup.style.display = 'none';
+        } else {
+            batchSizeGroup.style.display = 'flex';
+            batchSizeGroup.style.flexDirection = 'column';
+            syncSizeGroup.style.display = 'flex';
+            syncSizeGroup.style.flexDirection = 'column';
+        }
     });
     
     const chkUseCache = document.getElementById('chk-use-cache');
@@ -213,7 +239,10 @@ document.addEventListener('DOMContentLoaded', () => {
             speaker: selectSpeaker.value,
             vibevoice_model: selectVibevoiceModel.value,
             vibevoice_cfg: parseFloat(inputVibevoiceCfg.value),
-            vibevoice_steps: parseInt(inputVibevoiceSteps.value)
+            vibevoice_steps: parseInt(inputVibevoiceSteps.value),
+            tts_mode: selectTtsMode.value,
+            batch_size: parseInt(inputBatchSize.value),
+            sync_size: parseInt(inputSyncSize.value)
         };
 
         // Reset view states
@@ -354,7 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 processTitle.textContent = 'Sintetizando Voz';
                 processDesc.textContent = selectSpeaker.value === 'windows_native' 
                     ? 'Generando audio doblado al español con TTS Nativo de Windows...' 
-                    : 'Generando audio doblado al español con VibeVoice...';
+                    : 'Generando audio doblado al español con el modelo de síntesis (TTS)...';
                 statusText = 'Generando TTS...';
                 statusDotColor = '#d946ef';
                 break;
@@ -463,7 +492,7 @@ document.addEventListener('DOMContentLoaded', () => {
             "1b_demucs_separation": { name: "Separación Vocal (Demucs)", icon: "fa-scissors", color: "#60a5fa" },
             "2_transcription": { name: "Transcripción (WhisperX)", icon: "fa-closed-captioning", color: "#f59e0b" },
             "3_translation": { name: "Traducción (Ollama)", icon: "fa-language", color: "#8b5cf6" },
-            "4_tts_synthesis": { name: selectSpeaker.value === 'windows_native' ? "Doblaje (Windows TTS)" : "Doblaje (VibeVoice)", icon: "fa-microphone", color: "#d946ef" },
+            "4_tts_synthesis": { name: selectSpeaker.value === 'windows_native' ? "Doblaje (Windows TTS)" : "Doblaje (TTS)", icon: "fa-microphone", color: "#d946ef" },
             "5_synchronization": { name: "Sincronización Temporal", icon: "fa-clock", color: "#06b6d4" },
             "5b_audio_mixing": { name: "Mezcla de Audio", icon: "fa-sliders", color: "#14b8a6" },
             "6_video_merging": { name: "Ensamble de Video", icon: "fa-film", color: "#10b981" },

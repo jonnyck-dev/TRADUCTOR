@@ -28,7 +28,6 @@ Este proyecto es una aplicación web local que automatiza el proceso de traducci
    - Mezcla final profesional (`dubbed_mixed.wav`) que combina la voz doblada en español con el fondo original con volumen ajustado, preservando la música y efectos especiales en estéreo.
 8. **Detección y Advertencia de Modelos Cloud (Ollama)**:
    - Implementación de la función de validación `call_ollama_api` en `translator.py` con una clase de excepción dedicada `OllamaCloudModelError` para aislar fallos de JSONDecodeError.
-   - Eliminación de todas las lógicas de fallback y cascadas (traducción por lotes/individuales) en `translator.py` a solicitud del usuario, configurando un modo **One-Shot 100% Exclusivo** para medir con precisión la velocidad de los modelos cloud.
    - Actualización del selector en `index.html` organizando los modelos con `<optgroup>` y añadiendo las opciones reales de tu máquina.
 9. **Registro y Visualización de Timers (Optimización)**:
    - Medición precisa de cada fase en el backend (`process_translation_task` en `backend/main.py`) guardando los resultados en `timing_report.json` dentro del directorio de caché de la tarea.
@@ -36,69 +35,57 @@ Este proyecto es una aplicación web local que automatiza el proceso de traducci
 
 ---
 
-## 🎯 Plan de Optimización de Rendimiento y Correcciones Activas
+## 🎯 Plan de Migración a VoxCPM2 y Correcciones Activas
 
-### 1. Generación por Lotes (Batch) de TTS VibeVoice (En Progreso)
-- **Problema**: La generación individual de cada frase mediante VibeVoice tarda demasiado (~14 minutos para un video de 20 minutos) debido a los overheads de arranque de síntesis.
+### 1. Creación de Entorno Virtual y Conservación de VibeVoice (Pendiente)
+- **Conservar Vínculo Simbólico**: **NO se eliminará ni se romperá** el enlace simbólico `backend/vibevoice` para preservar la compatibilidad con el código anterior y proteger los archivos locales del host.
+- **Arquitectura Pluggable (TTS Modular)**: Diseñaremos el sistema de forma que se pueda alternar entre **VoxCPM2** y **VibeVoice** dinámicamente mediante la configuración del frontend o una variable del backend (`tts_engine`).
+- **Crear Entorno Virtual para VoxCPM**: Crear un entorno de Windows dedicado en `backend/VoxCPM/env_voxcpm` para aislar sus dependencias de 2B parámetros:
+  ```cmd
+  cd /d G:\IA\PROYECTOS\Traductor\backend\VoxCPM
+  python -m venv env_voxcpm
+  ```
+- **Instalar Dependencias en env_voxcpm**:
+  - Activar el entorno virtual e instalar PyTorch con soporte CUDA:
+    ```cmd
+    env_voxcpm\Scripts\activate
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+    ```
+  - Instalar el paquete `voxcpm` en modo editable y librerías auxiliares:
+    ```cmd
+    pip install -e .
+    pip install fastapi uvicorn requests pydantic soundfile
+    ```
+
+### 2. Creación del Servidor FastAPI de VoxCPM (`backend/voxcpm_server.py`) (Pendiente)
+- **Problema**: Necesitamos un backend persistente para cargar el modelo VoxCPM2 en VRAM y responder consultas rápidamente sin el overhead de re-inicialización en cada frase.
 - **Solución**:
-  - Agrupar frases en bloques contiguos de 5.
-  - Generar el audio completo del lote (`batch_{batch_idx}_raw.wav`) en una única llamada al servidor VibeVoice.
-  - Ejecutar WhisperX en el audio del lote para obtener los tiempos exactos de inicio y fin de cada palabra en español.
-  - Alinear las 5 frases originales con las palabras de WhisperX y segmentar el lote en archivos `phrase_{idx}.mp3` individuales con un pequeño margen de 0.05s.
-  - Implementar un fallback proporcional en caso de que WhisperX devuelva timestamps vacíos o incompletos.
+  - Crear [backend/VoxCPM/voxcpm_server.py](file:///mnt/g/IA/PROYECTOS/Traductor/backend/VoxCPM/voxcpm_server.py) exponiendo un endpoint `/api/tts` y un endpoint `/shutdown`.
+  - El servidor cargará `openbmb/VoxCPM2` con soporte CUDA, `load_denoiser=False` y en `torch.bfloat16` para optimizar memoria.
+  - Implementar un mutex de concurrencia (`with lock:`) para proteger la generación del modelo, asegurando la seguridad de hilos en PyTorch a nivel de proceso único.
+  - Liberar la memoria de la GPU tras cada generación mediante `torch.cuda.empty_cache()` para mantener el consumo general bajo el límite estricto de **10 GB de VRAM**.
+  - Este servidor coexistirá con `vibevoice_server.py`, permitiendo levantar el correspondiente según el motor seleccionado.
 
-### 2. Selección de Modelo, CFG y Steps en la UI (Completado)
-- **Control de Parámetros en UI**:
-  - Se añade un selector de modelo VibeVoice (`VibeVoice-1.5B` estándar y `VibeVoice-Realtime-0.5B` de streaming).
-  - Se implementan controles deslizantes (range sliders) para ajustar en tiempo real el valor de **CFG Scale** (de 1.0 a 3.0) y de **Pasos DDPM / Steps** (de 5 a 50).
-- **Integración con Backend**:
-  - El frontend (`app.js`) lee y envía los valores elegidos al iniciar el pipeline (`/api/process`).
-  - La API de FastAPI (`main.py`) recibe los parámetros y los propaga al cliente de TTS (`generate_individual_tts` en `tts_client.py`).
-  - El servidor local de VibeVoice recibe los parámetros en la petición `/api/tts` y los aplica dinámicamente antes de iniciar la generación llamando a `model.set_ddpm_inference_steps(request.ddpm_steps)` e inyectando `cfg_scale=request.cfg_scale` en la generación autoregresiva.
-
-### 3. Visualización y Detalles del Paso Demucs (Completado)
-- **Problema**: El paso de separación vocal por Demucs se ejecuta en la GPU en segundo plano pero no tiene visibilidad en la interfaz de usuario, haciendo parecer que el proceso se detiene en "Descargando video".
+### 3. Refactorización del Cliente TTS (`backend/tts_client.py`) (Pendiente)
+- **Problema**: El cliente actual está configurado específicamente para comunicarse con el servidor y parámetros de VibeVoice, e inicia múltiples servidores paralelos. Además, el acoplamiento a nombres como `vibevoice_` genera confusión al migrar de modelo.
 - **Solución**:
-  - Se añade un estado de tarea `"separating"` en el backend (`main.py`) justo antes de llamar a `run_demucs_separation` estableciendo el progreso en 25%.
-  - El frontend (`app.js`) maneja este nuevo estado y actualiza el título del diálogo a "Separando Voces (Demucs)", la descripción a "Separando el speaker del fondo usando Demucs offline (Aceleración GPU)..." y el color del indicador.
-  - Se añade el paso detallado de separación vocal de Demucs en la sección explicativa "¿Cómo funciona?" de `index.html`.
+  - **Generalizar Nomenclatura**: Renombrar funciones y variables obsoletas de VibeVoice a términos genéricos de TTS para desacoplar el código:
+    - `start_vibevoice_servers` -> `start_tts_server`
+    - `stop_vibevoice_servers` -> `stop_tts_server`
+    - `vibevoice_model` -> `tts_model`
+    - `vibevoice_cfg` -> `tts_cfg`
+    - `vibevoice_steps` -> `tts_steps`
+  - Modificar las funciones para iniciar/detener **únicamente 1 servidor** de `voxcpm_server.py` en el puerto `8001` (para realizar pruebas de rendimiento base y medir velocidad sin saturar la VRAM).
+  - Configurar el cliente para realizar llamadas secuenciales al servidor (con un pool de tamaño 1) para evaluar el rendimiento inicial. Si Joan decide que requiere mayor velocidad, escalaremos posteriormente a 2-3 instancias paralelas.
+  - Mapear los parámetros de la petición hacia VoxCPM2:
+    - `tts_cfg` -> `cfg_value` (VoxCPM2 acepta de 1.0 a 3.0, recomendado: 2.0).
+    - `tts_steps` -> `inference_timesteps` (Recomendado: 10 o 15).
+  - Configurar la clonación Zero-Shot: si se selecciona `cloned_speaker`, pasar la ruta de `cloned_speaker.wav` directamente a `reference_wav_path` en `model.generate()`.
+  - *Nota*: Por simplicidad y YAGNI, usaremos el modo **Controllable Voice Cloning** básico pasándole solo `reference_wav_path` para lograr una clonación de timbre de alta fidelidad sin la sobre-ingeniería de transcribir la muestra de voz en inglés.
 
-### 4. Guardado de Chunks Simplificados (english_minimal.json / spanish_minimal.json) (Completado)
-- **Problema**: El procesamiento en memoria de la simplificación de chunks de transcripción ("Compress & Merge") es óptimo en velocidad y memoria, pero no deja archivos intermedios legibles en disco para que el usuario analice el texto enviado y devuelto por el LLM.
+### 4. Actualización del Frontend (UI y Controladores) (Pendiente)
+- **Problema**: El selector de modelos de síntesis y las etiquetas de la interfaz siguen mostrando VibeVoice y enviando parámetros específicos del modelo anterior.
 - **Solución**:
-  - Se modifica `translate_chunks` en `translator.py` para aceptar un argumento opcional `save_dir`.
-  - Si se proporciona `save_dir`, la función guarda de manera paralela en disco:
-    - `english_minimal.json`: los textos e intervalos de tiempo limpios (sin `words`) enviados al modelo.
-    - `spanish_minimal.json`: las traducciones en bruto devueltas por Ollama antes de fusionarse con los tiempos a nivel de palabra originales.
-  - Se propaga el `whisper_dir` desde `main.py` al llamar a `translate_chunks`.
-
-### 5. Traducción con Preservación de Índices y Auto-Recuperación Focalizada (Completado)
-- **Problema**: Al traducir cientos de chunks en un solo bloque (One-Shot), el LLM a veces combina o salta pequeños fragmentos (por ejemplo, devolviendo 312 traducciones para 314 chunks originales). Esto genera una discrepancia de tamaños que hace fallar la sincronización.
-- **Solución**:
-  - Se añade una clave `"index"` correlativa (0, 1, 2...) a cada chunk enviado en el payload de traducción (`english_minimal.json`).
-  - Se actualiza el prompt del sistema para ordenar al LLM que no combine ni omita chunks y que devuelva exactamente los mismos índices.
-  - Al recibir la traducción, se parsean los índices recibidos y se mapean en un diccionario.
-  - Si faltan índices, el backend identifica cuáles faltan y realiza de manera automática una traducción rápida e individual de esos fragmentos faltantes con Ollama.
-  - Se reconstruye la lista ordenada completa a partir de los índices recuperados, garantizando un tamaño final de salida idéntico al de entrada (100% de éxito en la sincronización).
-
-### 6. Verdadero Paralelismo con Múltiples Servidores VibeVoice (Procesos Independientes) (En Progreso)
-- **Problema**:
-  - Al quitar el `lock` en el endpoint `/api/tts` de un único proceso de VibeVoice, múltiples hilos ejecutan `model.generate()` de manera concurrente en la misma instancia del modelo en GPU. Esto corrompe los KV-caches, estados y masks internos de PyTorch, causando palabras repetidas, silencios, y una alta contención que eleva el tiempo a 2800 segundos.
-  - Si se usa un lock en un solo proceso, la generación es secuencial y extremadamente lenta.
-- **Solución**:
-  - **Múltiples Puertos y Procesos**: Modificar `vibevoice_server.py` para aceptar un parámetro `--port`, añadir el `with lock:` de vuelta a nivel de endpoint, y llamar a `torch.cuda.empty_cache()` para liberar memoria activamente.
-  - **Dynamic Workers (VRAM Safe < 10GB)**: En `tts_client.py`, determinar el número de procesos servidores a levantar para no superar los 10 GB de VRAM (incluyendo el sistema operativo y navegador):
-    - `0.5B Streaming`: 3 procesos independientes (puertos 8001-8003). Consume ~5.4 GB de VibeVoice + ~2 GB del sistema/pantalla = ~7.4 GB VRAM total.
-    - `1.5B Standard`: 1 proceso (puerto 8001). Consume ~4.2 GB de VibeVoice + ~2 GB del sistema/pantalla = ~6.2 GB VRAM total.
-  - **Balanceo en Pool de Hilos**: Distribuir las peticiones de síntesis entre los puertos activos de forma balanceada usando un pool de conexiones/puertos disponibles o round-robin.
-  - **Parada Limpia**: Asegurar que al finalizar la tarea o cancelarla, se detengan todos los subprocesos en todos los puertos iniciados.
-
-### 7. Formateo Dinámico de Textos según Arquitectura de Modelo (En Progreso)
-- **Problema**:
-  - En `vibevoice_server.py`, el texto enviado al modelo se formatea anteponiendo `"Speaker 1: "`. 
-  - Para el modelo **0.5B Streaming**, esto causa que la voz lea literalmente "Speaker 1" al inicio de algunas frases debido a su menor escala y distinta sensibilidad al formato del prompt.
-  - Para el modelo **1.5B Standard**, el formato `"Speaker 1: "` es estrictamente requerido por su arquitectura para alinear correctamente los pesos del locutor.
-- **Solución**:
-  - Implementar un **formateo dinámico** en `vibevoice_server.py` utilizando la bandera `is_streaming`:
-    - Si `is_streaming` es `True` (0.5B): Se remueve el prefijo y se envía texto plano (`f"{request.text}\n"`).
-    - Si `is_streaming` es `False` (1.5B): Se mantiene el prefijo `"Speaker 1: {request.text}\n"`.
+  - Actualizar [frontend/index.html](file:///mnt/g/IA/PROYECTOS/Traductor/frontend/index.html) para renombrar los títulos a **VoxCPM2** y remover los modelos obsoletos de VibeVoice.
+  - Actualizar los range sliders y selectores de la interfaz para enviar variables genéricas (`tts_model`, `tts_cfg`, `tts_steps`) al backend.
+  - Adaptar [frontend/app.js](file:///mnt/g/IA/PROYECTOS/Traductor/frontend/app.js) para mapear estas nuevas variables al pipeline `/api/process`.

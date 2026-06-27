@@ -299,8 +299,8 @@ def test_batch_synthesis():
     # Pair each chunk with its original 0-indexed index
     chunks_with_idx = list(enumerate(chunks))
     
-    # Group in batches of 5
-    batch_size = 5
+    # Group in batches of 15
+    batch_size = 15
     batches = [chunks_with_idx[i:i+batch_size] for i in range(0, len(chunks_with_idx), batch_size)]
     print(f"Total batches to process: {len(batches)}")
     

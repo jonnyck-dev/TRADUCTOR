@@ -43,9 +43,12 @@ class ProcessRequest(BaseModel):
     url: str
     model: str = "gemma4:e2b-it-qat"
     speaker: str = "en-Frank_man"
-    vibevoice_model: str = "VibeVoice-1.5B"
-    vibevoice_cfg: float = 1.3
+    vibevoice_model: str = "openbmb/VoxCPM2"
+    vibevoice_cfg: float = 2.0
     vibevoice_steps: int = 10
+    tts_mode: str = "sentence"
+    batch_size: int = 15
+    sync_size: int = 5
 
 def preprocess_chunks(chunks: list) -> list:
     """
@@ -285,11 +288,9 @@ def prepare_cloned_voice(audio_path: str, whisper_json_path: str):
                 print(f"Primera palabra/frase detectada en el segundo: {start_sec}")
                 break
                 
-        # Rutas de destino
+        # Rutas de destino genéricas
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        voices_dir = os.path.join(base_dir, "backend", "vibevoice", "demo", "voices")
-        os.makedirs(voices_dir, exist_ok=True)
-        cloned_wav_path = os.path.join(voices_dir, "cloned_speaker.wav")
+        cloned_wav_path = os.path.join(base_dir, "backend", "cloned_speaker.wav")
         
         # Recortar 1 minuto de audio usando pydub
         print(f"Cargando audio original para recorte: {audio_path}")
@@ -303,11 +304,21 @@ def prepare_cloned_voice(audio_path: str, whisper_json_path: str):
         sample = audio[start_ms:end_ms]
         sample.export(cloned_wav_path, format="wav")
         print(f"Voz clonada guardada con éxito en: {cloned_wav_path}")
+        
+        # Copia opcional para compatibilidad con VibeVoice
+        vibevoice_voices_dir = os.path.join(base_dir, "backend", "vibevoice", "demo", "voices")
+        if os.path.exists(vibevoice_voices_dir):
+            try:
+                import shutil
+                shutil.copy(cloned_wav_path, os.path.join(vibevoice_voices_dir, "cloned_speaker.wav"))
+                print("Copiada voz clonada a carpeta de VibeVoice para retrocompatibilidad.")
+            except Exception as ce:
+                print(f"Failed to copy to VibeVoice folder: {ce}")
     except Exception as e:
         print(f"Error al preparar la voz clonada: {e}")
         traceback.print_exc()
 
-def process_translation_task(task_id: str, url: str, model: str, speaker: str, vibevoice_model: str = None, vibevoice_cfg: float = 1.3, vibevoice_steps: int = 10):
+def process_translation_task(task_id: str, url: str, model: str, speaker: str, vibevoice_model: str = None, vibevoice_cfg: float = 2.0, vibevoice_steps: int = 10, tts_mode: str = "sentence", batch_size: int = 15, sync_size: int = 5):
     import time
     start_task_time = time.time()
     step_times = {}
@@ -383,15 +394,70 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, v
                 json.dump(translated_data, f, ensure_ascii=False, indent=2)
         step_times["3_translation"] = time.time() - t0
             
-        # 4. Generate individual Spanish TTS MP3s using VibeVoice
+        # 4. Generate Spanish TTS (One-shot or Sentence-by-sentence)
         t0 = time.time()
         tasks[task_id]["status"] = "synthesizing"
         tasks[task_id]["progress"] = 75
         if speaker == "cloned_speaker":
             # Extract 1 minute sample from clean vocals wav instead of noisy original audio
             prepare_cloned_voice(vocals_wav_path, orig_json_path)
+
+        from audio_processor import get_flat_timestamp
+        if tts_mode == "oneshot":
+            print("[TTS] Operating in One-Shot Mode (merging all phrases)...")
+            # Merge all Spanish texts into a single string
+            merged_text = " ".join([c.get("text", "").strip() for c in translated_chunks if c.get("text", "").strip()])
+            
+            # Find the start time of the first non-empty phrase
+            first_start_time = 0.0
+            for chunk in translated_chunks:
+                if chunk.get("text", "").strip():
+                    ts = get_flat_timestamp(chunk.get("timestamp", [0.0, 0.0]))
+                    first_start_time = ts[0]
+                    break
+            
+            # Create a single merged chunk
+            tts_chunks = [{"text": merged_text, "timestamp": [first_start_time, duration_sec]}]
+        else:
+            # Group chunks in batches of `batch_size` in memory (Sentence Mode batching)
+            print(f"[TTS] Operating in Sentence Mode (grouping in batches of {batch_size} phrases)...")
+            tts_chunks = []
+            for i in range(0, len(translated_chunks), batch_size):
+                batch = translated_chunks[i:i+batch_size]
+                merged_text = " ".join([c.get("text", "").strip() for c in batch if c.get("text", "").strip()])
+                if not merged_text:
+                    continue
+                
+                # Get start timestamp of first non-empty chunk in batch
+                start_time = None
+                for c in batch:
+                    if c.get("text", "").strip():
+                        ts = get_flat_timestamp(c.get("timestamp", [0.0, 0.0]))
+                        start_time = ts[0]
+                        break
+                if start_time is None:
+                    ts = get_flat_timestamp(batch[0].get("timestamp", [0.0, 0.0]))
+                    start_time = ts[0]
+                    
+                # Get end timestamp of last non-empty chunk in batch
+                end_time = None
+                for c in reversed(batch):
+                    if c.get("text", "").strip():
+                        ts = get_flat_timestamp(c.get("timestamp", [0.0, 0.0]))
+                        end_time = ts[1]
+                        break
+                if end_time is None:
+                    ts = get_flat_timestamp(batch[-1].get("timestamp", [0.0, 0.0]))
+                    end_time = ts[1]
+                
+                tts_chunks.append({
+                    "text": merged_text,
+                    "timestamp": [start_time, end_time],
+                    "original_chunks": batch  # Save reference for slicing later
+                })
+
         mp3_paths = generate_individual_tts(
-            translated_chunks, 
+            tts_chunks, 
             tts_dir, 
             speaker_name=speaker, 
             task_id=task_id,
@@ -401,12 +467,32 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, v
         )
         step_times["4_tts_synthesis"] = time.time() - t0
         
+        # If in Sentence Mode, slice into decoupled sync_size blocks using Single-Pass WhisperX (unless sizes match)
+        if tts_mode == "sentence":
+            if batch_size != sync_size:
+                print(f"[TTS] Slicing super-audio into blocks of {sync_size} phrases via Single-Pass WhisperX...")
+                from audio_processor import process_super_audio_with_whisperx
+                
+                sliced_mp3s, final_sync_chunks = process_super_audio_with_whisperx(
+                    mp3_paths, translated_chunks, sync_size, tts_dir
+                )
+                
+                tts_chunks_for_sync = final_sync_chunks
+                mp3_paths_for_sync = sliced_mp3s
+            else:
+                print(f"[TTS] Batch Size ({batch_size}) equals Sync Size ({sync_size}). Bypassing WhisperX slicing!")
+                tts_chunks_for_sync = tts_chunks
+                mp3_paths_for_sync = mp3_paths
+        else:
+            tts_chunks_for_sync = tts_chunks
+            mp3_paths_for_sync = mp3_paths
+        
         # 5. Overlay, synchronize and speed up chunks (Splicing, stretching and overlaying)
         t0 = time.time()
         tasks[task_id]["status"] = "synchronizing"
         tasks[task_id]["progress"] = 85
         synced_wav_path = os.path.join(output_dir, "dubbed_synced.wav")
-        sync_individual_phrases(translated_chunks, mp3_paths, synced_wav_path, duration_sec)
+        sync_individual_phrases(tts_chunks_for_sync, mp3_paths_for_sync, synced_wav_path, duration_sec)
         step_times["5_synchronization"] = time.time() - t0
         
         # 5b. Mix synced Spanish voice and original background instrumental track
@@ -527,7 +613,10 @@ def process_video(request: ProcessRequest, background_tasks: BackgroundTasks):
         request.speaker,
         request.vibevoice_model,
         request.vibevoice_cfg,
-        request.vibevoice_steps
+        request.vibevoice_steps,
+        request.tts_mode,
+        request.batch_size,
+        request.sync_size
     )
     return {"task_id": task_id}
 

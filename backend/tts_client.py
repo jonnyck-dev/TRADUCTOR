@@ -1,5 +1,9 @@
 import subprocess
 import os
+import time
+import requests
+import queue
+from concurrent.futures import ThreadPoolExecutor
 from pydub import AudioSegment
 from whisper_client import wsl_to_windows_path
 
@@ -15,108 +19,103 @@ def remove_cancelled_task(task_id: str):
         cancelled_tasks.remove(task_id)
         print(f"Removed task {task_id} from cancelled_tasks set in tts_client")
 
-def start_vibevoice_servers(model_name_or_path: str = None, num_workers: int = 4) -> list:
-    import time
-    import requests
-    from whisper_client import wsl_to_windows_path
-    
+def start_tts_server(model_name_or_path: str = None, port: int = 8001, engine: str = "voxcpm") -> subprocess.Popen:
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    vibevoice_dir = os.path.join(base_dir, "backend", "vibevoice")
-    win_vibevoice_dir = wsl_to_windows_path(vibevoice_dir)
     
-    model_arg = ""
-    if model_name_or_path:
-        model_arg = f" --model_path checkpoints\\{model_name_or_path}"
-        
-    processes = []
-    ports = [8001 + i for i in range(num_workers)]
-    
-    for port in ports:
-        port_arg = f" --port {port}"
-        if os.name == 'nt':
-            python_exe = os.path.join(vibevoice_dir, "env_vibevoice", "Scripts", "python.exe")
-            cmd = f'"{python_exe}" vibevoice_server.py{model_arg}{port_arg}'
-            cwd = vibevoice_dir
+    if engine == "vibevoice":
+        code_dir = os.path.join(base_dir, "backend", "vibevoice")
+        server_script = "vibevoice_server.py"
+        venv_name = "env_vibevoice"
+        model_arg = f" --model_path checkpoints\\{model_name_or_path}" if model_name_or_path else ""
+    else:  # voxcpm
+        code_dir = os.path.join(base_dir, "backend", "VoxCPM")
+        server_script = "voxcpm_server.py"
+        venv_name = "env_voxcpm"
+        if model_name_or_path:
+            model_arg = f" --model_path {model_name_or_path}"
         else:
-            python_exe = os.path.join(vibevoice_dir, "env_vibevoice", "Scripts", "python.exe")
-            win_python_exe = wsl_to_windows_path(python_exe)
-            cmd = f'cmd.exe /c "cd /d {win_vibevoice_dir} && "{win_python_exe}" vibevoice_server.py{model_arg}{port_arg}" < /dev/null'
-            cwd = "/mnt/c"
+            model_arg = " --model_path openbmb/VoxCPM2"
             
-        print(f"Starting VibeVoice server dynamically on port {port} with command: {cmd}")
-        process = subprocess.Popen(cmd, shell=True, cwd=cwd)
-        processes.append(process)
+    win_code_dir = wsl_to_windows_path(code_dir)
+    port_arg = f" --port {port}"
+    python_exe = os.path.join(code_dir, venv_name, "Scripts", "python.exe")
+    
+    if os.name == 'nt':
+        cmd = f'"{python_exe}" {server_script}{model_arg}{port_arg}'
+        cwd = code_dir
+    else:
+        win_python_exe = wsl_to_windows_path(python_exe)
+        cmd = f'cmd.exe /c "cd /d {win_code_dir} && "{win_python_exe}" {server_script}{model_arg}{port_arg}" < /dev/null'
+        cwd = "/mnt/c"
         
-    print(f"Waiting for {num_workers} VibeVoice servers to start and load model...")
+    print(f"Starting {engine.upper()} TTS server dynamically on port {port} with command: {cmd}")
+    process = subprocess.Popen(cmd, shell=True, cwd=cwd)
+    
+    print(f"Waiting for {engine.upper()} TTS server to start and load model...")
     ready_ports = set()
     start_time = time.time()
     
-    while time.time() - start_time < 90:
-        for port in ports:
-            if port in ready_ports:
-                continue
-            try:
-                resp = requests.get(f"http://127.0.0.1:{port}/openapi.json", timeout=1.0)
-                if resp.status_code == 200:
-                    print(f"VibeVoice server on port {port} is ready!")
-                    ready_ports.add(port)
-            except Exception:
-                pass
-        if len(ready_ports) == len(ports):
-            print(f"All {num_workers} VibeVoice servers are ready! (took {time.time() - start_time:.2f}s)")
-            break
+    while time.time() - start_time < 120:  # Allow up to 120s for 2B model loading
+        try:
+            resp = requests.get(f"http://127.0.0.1:{port}/openapi.json", timeout=1.0)
+            if resp.status_code == 200:
+                print(f"{engine.upper()} TTS server on port {port} is ready! (took {time.time() - start_time:.2f}s)")
+                ready_ports.add(port)
+                break
+        except Exception:
+            pass
         time.sleep(2.0)
         
-    missing = set(ports) - ready_ports
-    if missing:
-        print(f"Warning: The following VibeVoice server ports did not respond in time: {missing}")
+    if port not in ready_ports:
+        print(f"Warning: {engine.upper()} TTS server on port {port} did not respond in time.")
         
-    return processes
+    return process
 
-def stop_vibevoice_servers(processes=None, num_workers=4):
-    import requests
-    import subprocess
-    print(f"Stopping {num_workers} VibeVoice servers...")
-    
-    ports = [8001 + i for i in range(num_workers)]
-    for port in ports:
+def stop_tts_server(process=None, port: int = 8001):
+    print(f"Stopping TTS server on port {port}...")
+    try:
+        resp = requests.post(f"http://127.0.0.1:{port}/shutdown", timeout=2.0)
+        print(f"Shutdown request response for port {port}:", resp.json())
+    except Exception as e:
+        print(f"Failed to call shutdown endpoint on port {port}: {e}")
+        
+    # Force kill any process listening on port to prevent VRAM leaks
+    if os.name == 'nt':
         try:
-            resp = requests.post(f"http://127.0.0.1:{port}/shutdown", timeout=2.0)
-            print(f"Shutdown request response for port {port}:", resp.json())
-        except Exception as e:
-            print(f"Failed to call shutdown endpoint on port {port}: {e}")
-            
-        # Force kill any process listening on port to prevent VRAM leaks
-        if os.name == 'nt':
-            try:
-                res = subprocess.run("netstat -ano", capture_output=True, text=True, shell=True)
-                for line in res.stdout.splitlines():
-                    if f":{port}" in line and "LISTENING" in line:
-                        parts = line.strip().split()
-                        if len(parts) >= 5:
-                            pid = parts[-1]
-                            print(f"Force-killing VibeVoice server process PID {pid} on port {port}...")
-                            subprocess.run(f"taskkill /f /pid {pid}", shell=True, capture_output=True)
-            except Exception as ke:
-                print(f"Error force-killing VibeVoice process on port {port}: {ke}")
-        else:
-            try:
-                res = subprocess.run(f"lsof -t -i:{port}", capture_output=True, text=True, shell=True)
-                pid = res.stdout.strip()
-                if pid:
-                    print(f"Force-killing VibeVoice server process PID {pid} on port {port}...")
-                    subprocess.run(f"kill -9 {pid}", shell=True)
-            except Exception as ke:
-                print(f"Error force-killing VibeVoice process on port {port}: {ke}")
+            res = subprocess.run("netstat -ano", capture_output=True, text=True, shell=True)
+            for line in res.stdout.splitlines():
+                if f":{port}" in line and "LISTENING" in line:
+                    parts = line.strip().split()
+                    if len(parts) >= 5:
+                        pid = parts[-1]
+                        print(f"Force-killing TTS server process PID {pid} on port {port}...")
+                        subprocess.run(f"taskkill /f /pid {pid}", shell=True, capture_output=True)
+        except Exception as ke:
+            print(f"Error force-killing process on port {port}: {ke}")
+    else:
+        try:
+            res = subprocess.run(f"lsof -t -i:{port}", capture_output=True, text=True, shell=True)
+            pid = res.stdout.strip()
+            if pid:
+                print(f"Force-killing TTS server process PID {pid} on port {port}...")
+                subprocess.run(f"kill -9 {pid}", shell=True)
+        except Exception as ke:
+            print(f"Error force-killing process on port {port}: {ke}")
 
-    if processes:
-        for process in processes:
-            try:
-                process.terminate()
-                process.wait(timeout=2)
-                print("Subprocess terminated.")
-            except Exception as pe:
-                print(f"Failed to terminate subprocess: {pe}")
+    if process:
+        try:
+            process.terminate()
+            process.wait(timeout=2)
+            print("Subprocess terminated.")
+        except Exception as pe:
+            print(f"Failed to terminate subprocess: {pe}")
+
+# --- Legacy Compatibility Wrappers ---
+def start_vibevoice_servers(model_name_or_path: str = None, num_workers: int = 1) -> list:
+    return [start_tts_server(model_name_or_path, port=8001, engine="vibevoice")]
+
+def stop_vibevoice_servers(processes=None, num_workers=1):
+    stop_tts_server(processes[0] if processes else None, port=8001)
 
 def align_words_to_chunks(chunk_texts, whisperx_words, total_duration):
     import re
@@ -176,14 +175,9 @@ def align_words_to_chunks(chunk_texts, whisperx_words, total_duration):
 
 def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-Frank_man", task_id: str = None, vibevoice_model: str = None, vibevoice_cfg: float = 1.3, vibevoice_steps: int = 10) -> list:
     """
-    Generates individual MP3 files for each translated chunk using VibeVoice TTS.
-    Batches generation to group 5 chunks at a time, then uses WhisperX to slice them.
+    Generates individual MP3 files for each translated chunk using TTS (VoxCPM or VibeVoice).
     Returns a list of absolute paths to the generated MP3 files.
     """
-    import requests
-    import time
-    from whisper_client import transcribe_audio, wsl_to_windows_path
-    
     os.makedirs(tts_dir, exist_ok=True)
     mp3_paths = [os.path.join(tts_dir, f"phrase_{i}.mp3") for i in range(len(chunks))]
     
@@ -235,12 +229,12 @@ def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-
                     except: pass
         return mp3_paths
 
-    # 2. VibeVoice Parallel Generation (individual phrase execution)
-    from concurrent.futures import ThreadPoolExecutor
-    import requests
-    import time
-    import queue
-    
+    # 2. Determine TTS Engine (VoxCPM or VibeVoice)
+    model_name = vibevoice_model or "openbmb/VoxCPM2"
+    engine = "vibevoice"
+    if "vox" in model_name.lower() or "cpm" in model_name.lower() or "openbmb" in model_name.lower():
+        engine = "voxcpm"
+        
     # Filter chunks that actually need generation
     chunks_to_generate = []
     for idx, chunk in enumerate(chunks):
@@ -250,17 +244,27 @@ def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-
             chunks_to_generate.append((idx, chunk))
             
     needs_generation = len(chunks_to_generate) > 0
-    server_processes = None
+    server_processes = []
     use_server = False
     
-    # Determine number of parallel server workers based on model size
-    # Scaled down to stay strictly under 10GB VRAM (including OS/Display overhead)
-    num_workers = 3 if (vibevoice_model and "0.5b" in vibevoice_model.lower()) else 1
-    print(f"Using {num_workers} parallel VibeVoice server instances for model: {vibevoice_model}")
+    # Determine parallel workers:
+    # VoxCPM always uses 1 instance for base testing (single-threaded).
+    # VibeVoice 0.5B uses 3 workers, VibeVoice 1.5B uses 1 worker.
+    if engine == "voxcpm":
+        num_workers = 3 if "0.5b" in model_name.lower() else 1
+    else:
+        num_workers = 3 if "0.5b" in model_name.lower() else 1
+        
+    print(f"Using {num_workers} parallel {engine.upper()} server instances for model: {model_name}")
     
     if needs_generation:
-        # Start VibeVoice persistent model servers
-        server_processes = start_vibevoice_servers(vibevoice_model, num_workers=num_workers)
+        # Start persistent server instances
+        ports = [8001 + i for i in range(num_workers)]
+        for port in ports:
+            p = start_tts_server(model_name, port=port, engine=engine)
+            server_processes.append(p)
+            
+        # Verify the primary server is alive
         try:
             resp = requests.get("http://127.0.0.1:8001/openapi.json", timeout=1.0)
             if resp.status_code == 200:
@@ -269,13 +273,18 @@ def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-
             pass
             
     if needs_generation and not use_server:
-        raise RuntimeError("VibeVoice persistent servers did not start successfully. Subprocess execution aborted.")
+        raise RuntimeError(f"{engine.upper()} persistent servers did not start successfully. Aborting pipeline.")
         
     try:
-        # Queue to hold available ports for parallel workers
+        # Setup workers queue
         port_queue = queue.Queue()
         for i in range(num_workers):
             port_queue.put(8001 + i)
+            
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        # Resolve the generic cloned_speaker WAV path on Windows
+        cloned_wav_path = os.path.join(base_dir, "backend", "cloned_speaker.wav")
+        win_cloned_wav_path = wsl_to_windows_path(cloned_wav_path)
             
         def process_single_chunk(item):
             idx, chunk = item
@@ -285,15 +294,13 @@ def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-
             text = chunk.get("text", "").strip()
             mp3_path = mp3_paths[idx]
             
-            # Temporary WAV file path
             temp_wav = os.path.join(tts_dir, f"phrase_{idx}_raw.wav")
             win_temp_wav = wsl_to_windows_path(temp_wav)
             
-            # Get an available port
             port = port_queue.get()
             server_url = f"http://127.0.0.1:{port}/api/tts"
             
-            print(f"Generating VibeVoice TTS on port {port} for phrase {idx}/{len(chunks)-1}: '{text[:40]}...'")
+            print(f"Generating {engine.upper()} TTS on port {port} for phrase {idx}/{len(chunks)-1}: '{text[:40]}...'")
             
             try:
                 max_retries = 3
@@ -301,14 +308,26 @@ def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-
                     if task_id and task_id in cancelled_tasks:
                         raise RuntimeError(f"Task {task_id} stopped by user.")
                     try:
-                        payload = {
-                            "text": text,
-                            "speaker": speaker_name,
-                            "output_path": win_temp_wav,
-                            "cfg_scale": vibevoice_cfg,
-                            "ddpm_steps": vibevoice_steps
-                        }
-                        response = requests.post(server_url, json=payload, timeout=120.0)
+                        # Construct payload based on engine
+                        if engine == "voxcpm":
+                            payload = {
+                                "text": text,
+                                "speaker": speaker_name,
+                                "output_path": win_temp_wav,
+                                "cfg_value": vibevoice_cfg,
+                                "inference_timesteps": vibevoice_steps,
+                                "reference_wav_path": win_cloned_wav_path if speaker_name == "cloned_speaker" else None
+                            }
+                        else:  # vibevoice
+                            payload = {
+                                "text": text,
+                                "speaker": speaker_name,
+                                "output_path": win_temp_wav,
+                                "cfg_scale": vibevoice_cfg,
+                                "ddpm_steps": vibevoice_steps
+                            }
+                        
+                        response = requests.post(server_url, json=payload, timeout=None)
                         if response.status_code == 200:
                             break
                         else:
@@ -316,8 +335,8 @@ def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-
                     except Exception as e:
                         if attempt == max_retries - 1:
                             raise e
-                        print(f"Server TTS call on port {port} for phrase {idx} failed (attempt {attempt+1}/{max_retries}). Retrying... Error: {e}")
-                        time.sleep(1.0)
+                        print(f"Server TTS call on port {port} failed (attempt {attempt+1}/{max_retries}). Retrying... Error: {e}")
+                        time.sleep(2.0)
                         
                 if not os.path.exists(temp_wav):
                     raise FileNotFoundError(f"Generated raw WAV file not found at: {temp_wav}")
@@ -326,7 +345,7 @@ def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-
                 try:
                     audio_segment = AudioSegment.from_wav(temp_wav)
                     audio_segment.export(mp3_path, format="mp3")
-                    print(f"Successfully generated and saved phrase {idx} MP3 on port {port}: {mp3_path}")
+                    print(f"Successfully generated and saved phrase {idx} MP3: {mp3_path}")
                 except Exception as e:
                     print(f"Error converting phrase {idx} WAV to MP3: {e}")
                     raise e
@@ -335,27 +354,24 @@ def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-
                         try: os.remove(temp_wav)
                         except: pass
             finally:
-                # Return port to queue
                 port_queue.put(port)
                     
-        # Process chunks in parallel using ThreadPoolExecutor
+        # Process chunks (either sequentially for voxcpm/single worker, or in parallel for multiple workers)
         if chunks_to_generate:
-            print(f"\nStarting parallel TTS generation for {len(chunks_to_generate)} phrases using {num_workers} workers...")
+            print(f"\nStarting TTS generation for {len(chunks_to_generate)} phrases...")
             with ThreadPoolExecutor(max_workers=num_workers) as executor:
-                # Use list(executor.map) to execute and raise any thread exceptions immediately
                 list(executor.map(process_single_chunk, chunks_to_generate))
                 
     finally:
         if server_processes:
-            stop_vibevoice_servers(server_processes, num_workers=num_workers)
+            for i, p in enumerate(server_processes):
+                stop_tts_server(p, port=8001 + i)
             
-    # Return list of paths
     return [os.path.join(tts_dir, f"phrase_{i}.mp3") if chunks[i].get("text", "").strip() else None for i in range(len(chunks))]
 
 def generate_tts(chunks: list, output_dir: str, speaker_name: str = "en-Frank_man") -> str:
     """
-    Deprecated: Backward compatible function. Replaced by generate_individual_tts + sync_individual_phrases.
-    Concatenates individual phrases to simulate the old output behavior if needed.
+    Deprecated: Backward compatible function.
     """
     tts_dir = os.path.join(output_dir, "tts")
     mp3_paths = generate_individual_tts(chunks, tts_dir, speaker_name)
@@ -378,4 +394,3 @@ def generate_tts(chunks: list, output_dir: str, speaker_name: str = "en-Frank_ma
         raise ValueError("No audio segments generated.")
         
     return expected_wav
-

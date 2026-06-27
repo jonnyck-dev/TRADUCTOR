@@ -34,10 +34,14 @@ graph TD
    - Ejecución en **modo One-Shot exclusivo** optimizando el contexto enviando solo textos y marcas básicas de tiempo (reduciendo ~70% de tokens redundantes).
    - **Corrección regex integrada (`fix_json_quotes`)**: Repara comillas dobles internas y comas omitidas antes del parser.
    - **Auto-corrección iterativa (hasta 5 intentos)**: Captura fallos de sintaxis JSON y le pide a la IA que se corrija pasándole la traza del error.
-4. **Síntesis y Doblaje (VibeVoice)**:
+4. **Síntesis y Doblaje (VibeVoice) - v2.0**:
    - **Clonación de Voz Zero-Shot**: Extrae automáticamente una muestra de 1 minuto de la voz original del video y la usa para sintetizar el español.
-   - **Slicing de 2 Minutos**: Segmenta el audio para evitar que el generador autoregresivo de VibeVoice degrade o alucine el habla.
-   - **Gestión de Ciclo de Vida**: Levanta el servidor TTS de forma dinámica antes de generar y lo apaga (`/shutdown`) de inmediato para liberar memoria gráfica (VRAM). Ejecuta en **2 hilos** paralelos para proteger la estabilidad de la PC.
+   - **Arquitectura Desacoplada de Sincronización (NUEVO)**: 
+     - Permite generar audio en lotes grandes (ej. 15 frases por `Batch Size`) para velocidad máxima, mientras usa una granularidad diferente para alinear el video (ej. 5 frases por `Sync Size`).
+     - **WhisperX de Pasada Única**: Concatena todos los lotes de audio inyectando 1.5s de silencio y ejecuta la alineación forzada una sola vez sobre un "Super-Audio" para ahorrar VRAM y tiempo.
+     - **Slicing Acústico Seguro**: Rebana el audio global aplicando 300ms de margen dinámico de padding y 25ms de Cross-Fade en los bordes para eliminar cualquier *clic* de corte.
+     - **Bypass Inteligente**: Si el `Batch Size` y `Sync Size` coinciden, el sistema detecta que el recorte es innecesario, apagando WhisperX por completo para un procesamiento ultra veloz.
+   - **Gestión de Ciclo de Vida**: Levanta el servidor TTS de forma dinámica antes de generar y lo apaga (`/shutdown`) de inmediato para liberar memoria gráfica. Ejecuta en **2 hilos** paralelos para proteger la estabilidad de la PC.
 
 ---
 

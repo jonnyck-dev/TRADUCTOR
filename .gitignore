@@ -8,3 +8,4 @@ __pycache__/
 *.m4a
 *.json
 *.log
+backend/VoxCPM/pretrained_models/

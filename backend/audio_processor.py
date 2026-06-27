@@ -589,3 +589,241 @@ def mix_voice_and_background(vocals_path: str, background_path: str, output_path
     mixed.export(output_path, format="wav")
     print(f"Professional dubbed audio mixed and saved to: {output_path}")
     return output_path
+
+def split_batch_audio_with_whisperx(batch_mp3_path: str, original_chunks: list, output_dir: str) -> list:
+    """
+    Takes a single MP3 containing multiple spoken sentences, runs WhisperX to get word-level timestamps,
+    and slices the MP3 into individual audio files corresponding to original_chunks.
+    """
+    import os
+    import re
+    from pydub import AudioSegment
+    from whisper_client import transcribe_audio
+
+    audio_filename = os.path.basename(batch_mp3_path)
+    audio_name_no_ext, _ = os.path.splitext(audio_filename)
+    json_path = os.path.join(output_dir, f"{audio_name_no_ext}_align.json")
+    
+    try:
+        wx_data = transcribe_audio(batch_mp3_path, json_path, language="es", model_name="tiny")
+    except Exception as e:
+        print(f"WhisperX alignment failed on {batch_mp3_path}: {e}")
+        return proportional_split(batch_mp3_path, original_chunks, output_dir)
+        
+    wx_words = []
+    for chunk in wx_data.get("chunks", []):
+        for word in chunk.get("words", []):
+            if "start" in word and "end" in word:
+                wx_words.append(word)
+                
+    if not wx_words:
+        print(f"No word timestamps found for {batch_mp3_path}. Falling back to proportional split.")
+        return proportional_split(batch_mp3_path, original_chunks, output_dir)
+
+    split_timestamps = []
+    current_wx_idx = 0
+    
+    for chunk in original_chunks:
+        text = chunk.get("text", "")
+        words_in_sentence = len([w for w in re.split(r'\W+', text) if w])
+        if words_in_sentence == 0:
+            words_in_sentence = 1 
+            
+        start_time = wx_words[current_wx_idx]["start"] if current_wx_idx < len(wx_words) else 0.0
+        end_idx = min(current_wx_idx + words_in_sentence - 1, len(wx_words) - 1)
+        end_time = wx_words[end_idx]["end"] if current_wx_idx < len(wx_words) else start_time + 1.0
+        
+        split_timestamps.append((start_time, end_time))
+        current_wx_idx = end_idx + 1
+
+    try:
+        audio = AudioSegment.from_file(batch_mp3_path)
+    except Exception as e:
+        print(f"Failed to load audio {batch_mp3_path}: {e}")
+        return [batch_mp3_path] * len(original_chunks)
+        
+    sliced_paths = []
+    for i, (start, end) in enumerate(split_timestamps):
+        slice_start = max(0, int((start - 0.1) * 1000))
+        slice_end = min(len(audio), int((end + 0.1) * 1000))
+        
+        if slice_end <= slice_start:
+            slice_end = slice_start + 500
+            
+        segment = audio[slice_start:slice_end]
+        out_path = os.path.join(output_dir, f"{audio_name_no_ext}_slice_{i}.wav")
+        segment.export(out_path, format="wav")
+        sliced_paths.append(out_path)
+        
+    return sliced_paths
+
+def proportional_split(batch_mp3_path: str, original_chunks: list, output_dir: str) -> list:
+    """Fallback splitting method if WhisperX fails."""
+    import os
+    from pydub import AudioSegment
+    try:
+        audio = AudioSegment.from_file(batch_mp3_path)
+    except Exception:
+        return [batch_mp3_path] * len(original_chunks)
+        
+    total_chars = sum(len(c.get("text", "").strip()) for c in original_chunks)
+    if total_chars == 0: total_chars = 1
+        
+    audio_len = len(audio)
+    sliced_paths = []
+    current_ms = 0
+    audio_filename = os.path.basename(batch_mp3_path)
+    audio_name_no_ext, _ = os.path.splitext(audio_filename)
+    
+    for i, chunk in enumerate(original_chunks):
+        char_len = len(chunk.get("text", "").strip())
+        fraction = char_len / total_chars
+        duration_ms = int(audio_len * fraction)
+        
+        segment = audio[current_ms:current_ms + duration_ms]
+        out_path = os.path.join(output_dir, f"{audio_name_no_ext}_prop_slice_{i}.wav")
+        segment.export(out_path, format="wav")
+        sliced_paths.append(out_path)
+        current_ms += duration_ms
+        
+    return sliced_paths
+
+def process_super_audio_with_whisperx(mp3_paths: list, original_chunks: list, sync_size: int, output_dir: str) -> tuple:
+    """
+    1. Concatenates all generated MP3s into a single super-audio file with 1.5s silence between them.
+    2. Runs WhisperX once on the super-audio.
+    3. Groups original_chunks into blocks of sync_size.
+    4. Finds timestamps for each block using WhisperX words.
+    5. Slices the super-audio into blocks with 300ms safety padding and 25ms cross-fades.
+    Returns: (list_of_sliced_wav_paths, list_of_grouped_sync_chunks)
+    """
+    import os
+    import re
+    from pydub import AudioSegment
+    from whisper_client import transcribe_audio
+    
+    # 1. Concatenate audio with 1.5s silence
+    super_audio = AudioSegment.empty()
+    silence_gap = AudioSegment.silent(duration=1500)  # 1.5 seconds
+    
+    for path in mp3_paths:
+        try:
+            seg = AudioSegment.from_file(path)
+            super_audio += seg + silence_gap
+        except Exception as e:
+            print(f"Error loading {path}: {e}")
+            
+    super_audio_path = os.path.join(output_dir, "super_audio_temp.wav")
+    super_audio.export(super_audio_path, format="wav")
+    
+    # 2. Run WhisperX
+    json_path = os.path.join(output_dir, "super_audio_align.json")
+    try:
+        wx_data = transcribe_audio(super_audio_path, json_path, language="es", model_name="tiny")
+    except Exception as e:
+        print(f"WhisperX alignment failed on super_audio: {e}")
+        wx_data = {"chunks": []}
+        
+    wx_words = []
+    for chunk in wx_data.get("chunks", []):
+        for word in chunk.get("words", []):
+            if "start" in word and "end" in word:
+                wx_words.append(word)
+                
+    # 3. Group original chunks by sync_size
+    sync_chunks = []
+    for i in range(0, len(original_chunks), sync_size):
+        block = original_chunks[i:i+sync_size]
+        merged_text = " ".join([c.get("text", "").strip() for c in block if c.get("text", "").strip()])
+        
+        start_time = None
+        for c in block:
+            if c.get("text", "").strip():
+                ts = get_flat_timestamp(c.get("timestamp", [0.0, 0.0]))
+                start_time = ts[0]
+                break
+        if start_time is None:
+            ts = get_flat_timestamp(block[0].get("timestamp", [0.0, 0.0]))
+            start_time = ts[0]
+            
+        end_time = None
+        for c in reversed(block):
+            if c.get("text", "").strip():
+                ts = get_flat_timestamp(c.get("timestamp", [0.0, 0.0]))
+                end_time = ts[1]
+                break
+        if end_time is None:
+            ts = get_flat_timestamp(block[-1].get("timestamp", [0.0, 0.0]))
+            end_time = ts[1]
+            
+        sync_chunks.append({
+            "text": merged_text,
+            "timestamp": [start_time, end_time],
+            "original_chunks": block
+        })
+
+    # 4. Find timestamps for each sync_chunk block in the super audio
+    if not wx_words:
+        print("No word timestamps found. Falling back to simple proportional split.")
+        return proportional_super_split(super_audio, sync_chunks, output_dir), sync_chunks
+
+    split_timestamps = []
+    current_wx_idx = 0
+    
+    for chunk in sync_chunks:
+        text = chunk["text"]
+        words_in_block = len([w for w in re.split(r'\W+', text) if w])
+        if words_in_block == 0:
+            words_in_block = 1 
+            
+        start_time = wx_words[current_wx_idx]["start"] if current_wx_idx < len(wx_words) else 0.0
+        end_idx = min(current_wx_idx + words_in_block - 1, len(wx_words) - 1)
+        end_time = wx_words[end_idx]["end"] if current_wx_idx < len(wx_words) else start_time + 1.0
+        
+        split_timestamps.append((start_time, end_time))
+        current_wx_idx = end_idx + 1
+
+    # 5. Slice with 300ms safety margins and 25ms anti-clicking fades
+    sliced_paths = []
+    margin_s = 0.3  # 300ms padding
+    fade_ms = 25    # 25ms cross-fade
+    
+    for i, (start, end) in enumerate(split_timestamps):
+        slice_start = max(0, int((start - margin_s) * 1000))
+        slice_end = min(len(super_audio), int((end + margin_s) * 1000))
+        
+        if slice_end <= slice_start:
+            slice_end = slice_start + 500
+            
+        segment = super_audio[slice_start:slice_end]
+        
+        if len(segment) > fade_ms * 2:
+            segment = segment.fade_in(fade_ms).fade_out(fade_ms)
+            
+        out_path = os.path.join(output_dir, f"sync_slice_{i}.wav")
+        segment.export(out_path, format="wav")
+        sliced_paths.append(out_path)
+        
+    return sliced_paths, sync_chunks
+
+def proportional_super_split(super_audio, sync_chunks, output_dir):
+    import os
+    total_chars = sum(len(c.get("text", "").strip()) for c in sync_chunks)
+    if total_chars == 0: total_chars = 1
+        
+    audio_len = len(super_audio)
+    sliced_paths = []
+    current_ms = 0
+    
+    for i, chunk in enumerate(sync_chunks):
+        char_len = len(chunk.get("text", "").strip())
+        fraction = char_len / total_chars
+        duration_ms = int(audio_len * fraction)
+        
+        segment = super_audio[current_ms:current_ms + duration_ms]
+        out_path = os.path.join(output_dir, f"sync_prop_slice_{i}.wav")
+        segment.export(out_path, format="wav")
+        sliced_paths.append(out_path)
+        current_ms += duration_ms
+        
+    return sliced_paths
