@@ -121,14 +121,14 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(res => res.json())
         .then(data => {
             selectCache.innerHTML = '';
-            if (data.length === 0) {
+            if (!data.caches || data.caches.length === 0) {
                 const opt = document.createElement('option');
                 opt.value = '';
                 opt.textContent = '(Ninguna caché disponible)';
                 selectCache.appendChild(opt);
                 return;
             }
-            data.forEach(cacheId => {
+            data.caches.forEach(cacheId => {
                 const opt = document.createElement('option');
                 opt.value = cacheId;
                 opt.textContent = cacheId;
