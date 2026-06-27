@@ -309,3 +309,80 @@ def unload_model(model: str):
 
 
 
+def enhance_translation_for_tts(chunks: list, model: str) -> list:
+    """
+    Second AI Pass: Cleans hallucinations, removes repetition loops, 
+    and adds strong grammatical punctuation for TTS emotion.
+    Enforces strict array length and index matching to prevent sync collapse.
+    """
+    import json
+    import re
+    print("\n[Sanador IA] Iniciando segunda pasada de limpieza y emoción para el TTS...")
+    
+    minimal_chunks = [{"index": i, "text": c.get("text", "")} for i, c in enumerate(chunks)]
+    json_input = json.dumps({"chunks": minimal_chunks}, ensure_ascii=False)
+    
+    prompt = (
+        "You are an expert audio script editor for an AI Voice Actor. "
+        "Your task is to sanitize and emotionally enhance this Spanish script.\n\n"
+        "CRITICAL RULES:\n"
+        "1. REMOVE ALL repetitive loops or hallucinations (e.g. 'ir a ir a ir', 'poquito poquito').\n"
+        "2. Fix broken or nonsensical sentences caused by speech recognition failures.\n"
+        "3. ADD intense grammatical punctuation (!, ?, ..., commas) to inject emotion into the TTS reading.\n"
+        "4. DO NOT use any emojis.\n"
+        "5. CRITICAL: You MUST return EXACTLY the same number of chunks, keeping the exact same 'index' IDs.\n"
+        "6. Return ONLY a valid JSON object in the format: {\"chunks\": [{\"index\": 0, \"text\": \"...\"}, ...]}\n\n"
+        f"ORIGINAL SCRIPT:\n{json_input}"
+    )
+    
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
+        "format": "json",
+        "options": {
+            "num_predict": 32768,
+            "temperature": 0.3
+        }
+    }
+    
+    try:
+        url = "http://127.0.0.1:11434/api/chat"
+        res = call_ollama_api(url, payload, timeout=300)
+        content = res.get("message", {}).get("content", "").strip()
+        
+        if "<think>" in content:
+            content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+            
+        start_idx = content.find('{')
+        end_idx = content.rfind('}')
+        if start_idx != -1 and end_idx != -1:
+            content = content[start_idx:end_idx+1]
+            
+        data = json.loads(content)
+        sanitized_chunks = data.get("chunks", [])
+        
+        # Security Check: Enforce structural integrity
+        if len(sanitized_chunks) != len(chunks):
+            print(f"[Sanador IA] ALERTA: La IA modificó la cantidad de segmentos ({len(sanitized_chunks)} vs {len(chunks)}). Abortando limpieza para proteger la sincronización.")
+            return chunks
+            
+        # Map back safely by index
+        sanitized_by_index = {c.get("index"): c.get("text", "") for c in sanitized_chunks}
+        
+        enhanced_chunks = []
+        for i, orig_chunk in enumerate(chunks):
+            new_chunk = dict(orig_chunk)
+            # If the index is missing or text is empty, fallback to original
+            new_text = sanitized_by_index.get(i)
+            if new_text is None or new_text.strip() == "":
+                new_text = orig_chunk.get("text", "")
+            new_chunk["text"] = new_text
+            enhanced_chunks.append(new_chunk)
+            
+        print("[Sanador IA] Limpieza exitosa. Guion optimizado para VibeVoice.")
+        return enhanced_chunks
+        
+    except Exception as e:
+        print(f"[Sanador IA] Falló la conexión o el formato ({e}). Usando traducción original.")
+        return chunks

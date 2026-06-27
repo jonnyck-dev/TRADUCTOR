@@ -379,20 +379,40 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, v
         tasks[task_id]["status"] = "translating"
         tasks[task_id]["progress"] = 55
         translated_json_path = os.path.join(whisper_dir, "spanish_translated.json")
-        if os.path.exists(translated_json_path):
-            print(f"Skipping translation, using cached: {translated_json_path}")
-            with open(translated_json_path, 'r', encoding='utf-8') as f:
+        enhanced_json_path = os.path.join(whisper_dir, "spanish_enhanced.json")
+        
+        if os.path.exists(enhanced_json_path):
+            print(f"Skipping translation & enhancement, using cached: {enhanced_json_path}")
+            with open(enhanced_json_path, 'r', encoding='utf-8') as f:
                 translated_data = json.load(f)
             translated_chunks = translated_data.get("chunks", [])
         else:
-            translated_chunks = translate_chunks(preprocessed_chunks, model=model, save_dir=whisper_dir)
+            if os.path.exists(translated_json_path):
+                print(f"Skipping translation, using cached raw translation: {translated_json_path}")
+                with open(translated_json_path, 'r', encoding='utf-8') as f:
+                    raw_data = json.load(f)
+                raw_translated_chunks = raw_data.get("chunks", [])
+            else:
+                raw_translated_chunks = translate_chunks(preprocessed_chunks, model=model, save_dir=whisper_dir)
+                raw_data = {
+                    "text": " ".join([c.get("text", "") for c in raw_translated_chunks]),
+                    "chunks": raw_translated_chunks
+                }
+                with open(translated_json_path, "w", encoding="utf-8") as f:
+                    json.dump(raw_data, f, ensure_ascii=False, indent=2)
+            
+            # 3b. Sanitize and enhance translation for TTS (Anti-Collapse)
+            from translator import enhance_translation_for_tts
+            translated_chunks = enhance_translation_for_tts(raw_translated_chunks, model=model)
+            
             translated_data = {
                 "text": " ".join([c.get("text", "") for c in translated_chunks]),
                 "chunks": translated_chunks
             }
-            with open(translated_json_path, "w", encoding="utf-8") as f:
+            with open(enhanced_json_path, "w", encoding="utf-8") as f:
                 json.dump(translated_data, f, ensure_ascii=False, indent=2)
-        step_times["3_translation"] = time.time() - t0
+                
+        step_times["3_translation_and_enhancement"] = time.time() - t0
             
         # 4. Generate Spanish TTS (One-shot or Sentence-by-sentence)
         t0 = time.time()
