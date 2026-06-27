@@ -80,6 +80,38 @@ body {
     margin-bottom: 20px;
 }
 
+.top-nav {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-family: var(--font-header);
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.top-nav a {
+    color: var(--color-text-dim);
+    text-decoration: none;
+    transition: var(--transition-smooth);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+}
+
+.top-nav a:hover {
+    color: var(--accent-red);
+    text-shadow: 0 0 10px var(--accent-glow-red);
+}
+
+.top-nav a.active {
+    color: var(--accent-red);
+    text-shadow: 0 0 12px var(--accent-glow-red);
+}
+
+.top-nav .separator {
+    color: var(--border-color);
+    font-weight: 300;
+}
+
 .logo {
     display: flex;
     align-items: center;

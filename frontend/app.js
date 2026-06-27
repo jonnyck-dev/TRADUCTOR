@@ -236,6 +236,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initial calls
     loadOllamaModels();
 
+    let openStudioOnLoad = false;
+    const btnProcessStudio = document.getElementById('btn-process-studio');
+    if (btnProcessStudio) {
+        btnProcessStudio.addEventListener('click', () => {
+            openStudioOnLoad = true;
+            btnProcess.click();
+        });
+    }
+
     // Start processing YouTube video
     btnProcess.addEventListener('click', () => {
         let url = '';
@@ -499,9 +508,14 @@ document.addEventListener('DOMContentLoaded', () => {
             timersSection.classList.add('hidden');
         }
         
-        // Auto play
+        // Auto play or redirect to Studio
         revealStudioButton();
-        videoPlayer.play();
+        if (openStudioOnLoad) {
+            openStudioOnLoad = false;
+            if (btnOpenStudio) btnOpenStudio.click();
+        } else {
+            videoPlayer.play();
+        }
     }
 
     // Render execution times bar graph
@@ -638,6 +652,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const studioVideoWrapper = document.getElementById('studio-video-wrapper');
     const playerWrapper = document.querySelector('.player-wrapper');
     
+    // Nav elements
+    const navHome = document.getElementById('nav-home');
+    const navStudio = document.getElementById('nav-studio');
+    
     // Timeline elements
     const trackEnglish = document.getElementById('track-english');
     const trackDubbed = document.getElementById('track-dubbed');
@@ -666,33 +684,33 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    btnOpenStudio.addEventListener('click', () => {
-        if (!currentTaskId) return;
-        
-        // Hide Home, Show Studio
-        homeView.classList.remove('view-active');
+    function openStudioView() {
+        if (!currentTaskId) {
+            alert('Por favor, procesa o selecciona un caché primero.');
+            return;
+        }
         homeView.classList.add('hidden');
         studioView.classList.remove('hidden');
-        studioView.classList.add('view-active');
-        
-        // Move video player to Studio
         studioVideoWrapper.appendChild(videoPlayer);
         videoPlayer.classList.remove('hidden');
-        
-        // Load data
+        if (navHome) navHome.classList.remove('active');
+        if (navStudio) navStudio.classList.add('active');
         loadStudioData();
-    });
+    }
 
-    btnCloseStudio.addEventListener('click', () => {
-        // Move video player back
+    function openHomeView() {
         playerWrapper.appendChild(videoPlayer);
-        
-        // Hide Studio, Show Home
-        studioView.classList.remove('view-active');
         studioView.classList.add('hidden');
         homeView.classList.remove('hidden');
-        homeView.classList.add('view-active');
-    });
+        if (navHome) navHome.classList.add('active');
+        if (navStudio) navStudio.classList.remove('active');
+    }
+
+    btnOpenStudio.addEventListener('click', openStudioView);
+    btnCloseStudio.addEventListener('click', openHomeView);
+    
+    if (navHome) navHome.addEventListener('click', (e) => { e.preventDefault(); openHomeView(); });
+    if (navStudio) navStudio.addEventListener('click', (e) => { e.preventDefault(); openStudioView(); });
 
     function loadStudioData() {
         const batchSize = parseInt(inputBatchSize.value) || 5;
