@@ -779,7 +779,7 @@ def list_available_caches():
         for entry in os.listdir(CACHE_DIR):
             task_dir = os.path.join(CACHE_DIR, entry)
             if os.path.isdir(task_dir):
-                final_video = os.path.join(task_dir, "output", "video_dubbed.mp4")
+                final_video = os.path.join(task_dir, "video_dubbed.mp4")
                 if os.path.exists(final_video):
                     valid_caches.append(entry)
     return {"status": "ok", "caches": valid_caches}
@@ -911,7 +911,7 @@ def reprocess_studio_block(task_id: str, req: ReprocessRequest, batch_size: int 
 @app.post("/api/studio/{task_id}/finalize")
 def finalize_studio_video(task_id: str):
     """Prepares the project for final assembly by clearing the old video outputs."""
-    output_video = os.path.join(CACHE_DIR, task_id, "output", "video_dubbed.mp4")
+    output_video = os.path.join(CACHE_DIR, task_id, "video_dubbed.mp4")
     verification_report = os.path.join(CACHE_DIR, task_id, "whisper", "verification_report.json")
     
     if os.path.exists(output_video):
