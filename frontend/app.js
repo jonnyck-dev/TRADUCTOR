@@ -500,6 +500,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Auto play
+        revealStudioButton();
         videoPlayer.play();
     }
 
@@ -626,4 +627,225 @@ document.addEventListener('DOMContentLoaded', () => {
             activeSubIndex = activeIndex;
         }
     });
+
+    // ==========================================
+    // STUDIO v3.0 LOGIC
+    // ==========================================
+    const btnOpenStudio = document.getElementById('btn-open-studio');
+    const btnCloseStudio = document.getElementById('btn-close-studio');
+    const homeView = document.getElementById('home-view');
+    const studioView = document.getElementById('studio-view');
+    const studioVideoWrapper = document.getElementById('studio-video-wrapper');
+    const playerWrapper = document.querySelector('.player-wrapper');
+    
+    // Timeline elements
+    const trackEnglish = document.getElementById('track-english');
+    const trackDubbed = document.getElementById('track-dubbed');
+    const timelineRuler = document.getElementById('timeline-ruler');
+    const trackVideo = document.getElementById('track-video');
+    const videoBlock = trackVideo.querySelector('.video-block');
+    
+    // Inspector elements
+    const inspectorBlockName = document.getElementById('inspector-block-name');
+    const inspectorContent = document.getElementById('inspector-content');
+    const studioTextarea = document.getElementById('studio-textarea');
+    const btnStudioPlayOrig = document.getElementById('btn-studio-play-orig');
+    const btnStudioPlayDub = document.getElementById('btn-studio-play-dub');
+    const btnStudioRegenerate = document.getElementById('btn-studio-regenerate');
+    const studioAudioPlayer = document.getElementById('studio-audio-player');
+    const btnStudioFinalize = document.getElementById('btn-studio-finalize');
+
+    let studioActiveBlock = null;
+    let studioData = null;
+    const PIXELS_PER_SECOND = 40;
+
+    // Show Studio Button when task finishes
+    function revealStudioButton() {
+        if (currentTaskId) {
+            btnOpenStudio.classList.remove('hidden');
+        }
+    }
+
+    btnOpenStudio.addEventListener('click', () => {
+        if (!currentTaskId) return;
+        
+        // Hide Home, Show Studio
+        homeView.classList.remove('view-active');
+        homeView.classList.add('hidden');
+        studioView.classList.remove('hidden');
+        studioView.classList.add('view-active');
+        
+        // Move video player to Studio
+        studioVideoWrapper.appendChild(videoPlayer);
+        videoPlayer.classList.remove('hidden');
+        
+        // Load data
+        loadStudioData();
+    });
+
+    btnCloseStudio.addEventListener('click', () => {
+        // Move video player back
+        playerWrapper.appendChild(videoPlayer);
+        
+        // Hide Studio, Show Home
+        studioView.classList.remove('view-active');
+        studioView.classList.add('hidden');
+        homeView.classList.remove('hidden');
+        homeView.classList.add('view-active');
+    });
+
+    function loadStudioData() {
+        const batchSize = parseInt(inputBatchSize.value) || 5;
+        fetch(`/api/studio/${currentTaskId}/data?batch_size=${batchSize}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    studioData = data.batches;
+                    renderTimeline();
+                } else {
+                    alert("Error loading studio data.");
+                }
+            })
+            .catch(err => console.error("Studio error:", err));
+    }
+
+    function renderTimeline() {
+        trackEnglish.innerHTML = '';
+        trackDubbed.innerHTML = '';
+        timelineRuler.innerHTML = '';
+        
+        if (!studioData || studioData.length === 0) return;
+        
+        let totalDuration = videoPlayer.duration || studioData[studioData.length - 1].end_time;
+        if (isNaN(totalDuration) || totalDuration <= 0) totalDuration = 100; // fallback
+        
+        const totalWidth = totalDuration * PIXELS_PER_SECOND;
+        
+        // Set track widths
+        trackEnglish.style.width = `${totalWidth}px`;
+        trackDubbed.style.width = `${totalWidth}px`;
+        timelineRuler.style.width = `${totalWidth}px`;
+        videoBlock.style.width = `${totalWidth}px`;
+        videoBlock.innerHTML = `<span style="position:relative; z-index:1; font-weight:bold;">Video Original (${formatTime(totalDuration)})</span>`;
+        
+        // Build Ruler Marks
+        for (let s = 0; s <= totalDuration; s += 10) {
+            const mark = document.createElement('div');
+            mark.style.position = 'absolute';
+            mark.style.left = `${s * PIXELS_PER_SECOND}px`;
+            mark.style.bottom = '0';
+            mark.style.borderLeft = '1px solid rgba(255,255,255,0.3)';
+            mark.style.height = '10px';
+            mark.style.paddingLeft = '5px';
+            mark.style.fontSize = '10px';
+            mark.style.color = 'rgba(255,255,255,0.5)';
+            mark.textContent = formatTime(s);
+            timelineRuler.appendChild(mark);
+        }
+        
+        // Render Blocks
+        studioData.forEach(batch => {
+            const left = batch.start_time * PIXELS_PER_SECOND;
+            const width = (batch.end_time - batch.start_time) * PIXELS_PER_SECOND;
+            
+            // English Block
+            const engBlock = document.createElement('div');
+            engBlock.className = 'timeline-block english-block';
+            engBlock.style.left = `${left}px`;
+            engBlock.style.width = `${Math.max(width, 30)}px`;
+            engBlock.innerHTML = `<div class="waveform-bg"></div><span style="position:relative; z-index:1;">${batch.text}</span>`;
+            trackEnglish.appendChild(engBlock);
+            
+            // Dubbed Block (Interactive)
+            const dubBlock = document.createElement('div');
+            dubBlock.className = 'timeline-block dubbed-block';
+            dubBlock.style.left = `${left}px`;
+            dubBlock.style.width = `${Math.max(width, 30)}px`;
+            dubBlock.innerHTML = `<div class="waveform-bg"></div><span style="position:relative; z-index:1;">${batch.text}</span>`;
+            
+            dubBlock.addEventListener('click', () => {
+                document.querySelectorAll('.dubbed-block').forEach(b => b.classList.remove('selected'));
+                dubBlock.classList.add('selected');
+                
+                selectStudioBlock(batch);
+                videoPlayer.currentTime = batch.start_time;
+            });
+            
+            trackDubbed.appendChild(dubBlock);
+        });
+    }
+
+    function selectStudioBlock(batch) {
+        studioActiveBlock = batch;
+        inspectorBlockName.innerHTML = `<i class="fa-solid fa-cube text-teal"></i> Bloque #${batch.batch_index} [${formatTime(batch.start_time)} - ${formatTime(batch.end_time)}]`;
+        studioTextarea.value = batch.text;
+        inspectorContent.classList.remove('hidden');
+    }
+
+    btnStudioPlayOrig.addEventListener('click', () => {
+        if (!studioActiveBlock) return;
+        studioAudioPlayer.src = `/api/studio/${currentTaskId}/audio/original?start=${studioActiveBlock.start_time}&end=${studioActiveBlock.end_time}`;
+        studioAudioPlayer.play();
+    });
+
+    btnStudioPlayDub.addEventListener('click', () => {
+        if (!studioActiveBlock) return;
+        // Anti-cache string
+        studioAudioPlayer.src = `/api/studio/${currentTaskId}/audio/dubbed/${studioActiveBlock.batch_index}?t=${new Date().getTime()}`;
+        studioAudioPlayer.play();
+    });
+
+    btnStudioRegenerate.addEventListener('click', () => {
+        if (!studioActiveBlock) return;
+        
+        btnStudioRegenerate.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Regenerando (Toma ~5s)...';
+        btnStudioRegenerate.disabled = true;
+        
+        const payload = {
+            batch_index: studioActiveBlock.batch_index,
+            text: studioTextarea.value,
+            speaker: selectSpeaker.value,
+            vibevoice_model: selectVibevoiceModel.value,
+            vibevoice_cfg: parseFloat(inputVibevoiceCfg.value),
+            vibevoice_steps: parseInt(inputVibevoiceSteps.value)
+        };
+        
+        fetch(`/api/studio/${currentTaskId}/reprocess?batch_size=${parseInt(inputBatchSize.value)||5}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            btnStudioRegenerate.innerHTML = '<i class="fa-solid fa-check"></i> ¡Éxito! Reproduce el Español.';
+            studioActiveBlock.text = studioTextarea.value; // Update local state for UI
+            
+            setTimeout(() => {
+                btnStudioRegenerate.innerHTML = '<i class="fa-solid fa-rotate"></i> Regenerate Audio (5s)';
+                btnStudioRegenerate.disabled = false;
+            }, 3000);
+            
+            // Auto play the newly generated dub
+            btnStudioPlayDub.click();
+        })
+        .catch(err => {
+            alert('Error regenerando audio: ' + err.message);
+            btnStudioRegenerate.innerHTML = '<i class="fa-solid fa-rotate"></i> Regenerate Audio (5s)';
+            btnStudioRegenerate.disabled = false;
+        });
+    });
+
+    btnStudioFinalize.addEventListener('click', () => {
+        if (!currentTaskId) return;
+        if (confirm("Se preparará el ensamblaje final. Deberás presionar 'Volver' y luego darle a Simular con Caché Local para que arme el video. ¿Continuar?")) {
+            fetch(`/api/studio/${currentTaskId}/finalize`, { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.message);
+                btnCloseStudio.click(); // Autoclose the studio to reveal the play button
+            })
+            .catch(err => alert('Error finalizing: ' + err));
+        }
+    });
+
 });

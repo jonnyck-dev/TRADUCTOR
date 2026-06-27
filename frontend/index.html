@@ -14,7 +14,7 @@
 </head>
 <body>
     <div class="glass-bg"></div>
-    <div class="app-container">
+    <div class="app-container view-active" id="home-view">
         <!-- Main Content Area -->
         <main class="main-content">
             <header class="app-header">
@@ -26,6 +26,9 @@
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <button id="btn-new" class="glow-button hidden" style="padding: 6px 12px; font-size: 13px; height: 32px; min-width: auto; margin: 0; background: linear-gradient(135deg, rgba(157, 78, 221, 0.4) 0%, rgba(0, 242, 254, 0.3) 100%); border: 1px solid rgba(255, 255, 255, 0.1);">
                         <i class="fa-solid fa-plus"></i> Nuevo
+                    </button>
+                    <button id="btn-open-studio" class="glow-button hidden" style="padding: 6px 12px; font-size: 13px; height: 32px; min-width: auto; margin: 0; background: linear-gradient(135deg, rgba(0, 242, 254, 0.4) 0%, rgba(157, 78, 221, 0.3) 100%); border: 1px solid rgba(0, 242, 254, 0.3);">
+                        <i class="fa-solid fa-scissors"></i> Estudio v3.0
                     </button>
                     <div class="status-indicator" id="global-status">
                         <span class="dot"></span> Listo para doblar
@@ -242,6 +245,71 @@
                 </div>
             </footer>
         </aside>
+    </div>
+
+    <!-- STUDIO VIEW v3.0 (Hidden by default) -->
+    <div id="studio-view" class="studio-container hidden">
+        <header class="app-header studio-header">
+            <div class="logo">
+                <i class="fa-solid fa-scissors purple-glow" style="color: #00f2fe;"></i>
+                <h1>AEGIS AUDIO EDITOR</h1>
+                <span class="badge" style="background: rgba(0, 242, 254, 0.2); color: #00f2fe;">v3.0</span>
+            </div>
+            <button id="btn-close-studio" class="glow-button"><i class="fa-solid fa-arrow-left"></i> Volver al Inicio</button>
+        </header>
+
+        <div class="studio-workspace">
+            <div class="studio-left">
+                <!-- Video player will be moved here dynamically by JS -->
+                <div id="studio-video-wrapper" class="studio-video-wrapper"></div>
+            </div>
+            
+            <div class="studio-right">
+                <div class="inspector-panel">
+                    <h3><i class="fa-solid fa-sliders"></i> AUDIO PROPERTIES</h3>
+                    <p id="inspector-block-name" class="text-gray" style="margin-bottom: 15px;">Selecciona un bloque de audio en la línea de tiempo inferior...</p>
+                    
+                    <div class="inspector-content hidden" id="inspector-content">
+                        <label>TRANSCRIPT (Español)</label>
+                        <textarea id="studio-textarea" rows="8"></textarea>
+                        
+                        <div class="inspector-actions" style="display: flex; gap: 10px; margin-top: 15px;">
+                            <button id="btn-studio-play-orig" class="glow-button" style="flex:1; background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1);"><i class="fa-solid fa-ear-listen"></i> Inglés</button>
+                            <button id="btn-studio-play-dub" class="glow-button" style="flex:1; background: rgba(0, 242, 254, 0.1); border-color: rgba(0, 242, 254, 0.3); color: #00f2fe;"><i class="fa-solid fa-play"></i> Español</button>
+                        </div>
+                        <audio id="studio-audio-player" class="hidden"></audio>
+                        
+                        <button id="btn-studio-regenerate" class="glow-button regenerate-btn" style="width: 100%; margin-top: 15px; background: linear-gradient(135deg, rgba(157, 78, 221, 0.6) 0%, rgba(0, 242, 254, 0.4) 100%);">
+                            <i class="fa-solid fa-rotate"></i> Regenerate Audio (5s)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="studio-timeline-section">
+            <div class="timeline-header">
+                <h3><i class="fa-solid fa-timeline"></i> TIMELINE</h3>
+                <button id="btn-studio-finalize" class="glow-button finish-btn" style="background: rgba(30, 215, 96, 0.2); border-color: rgba(30, 215, 96, 0.5); color: #1ed760;"><i class="fa-solid fa-film"></i> Ensamblar Video Final</button>
+            </div>
+            
+            <div class="timeline-container">
+                <div class="timeline-track-labels">
+                    <div class="track-label video-track">V1 | Video</div>
+                    <div class="track-label dubbed-track" style="color: #00f2fe;">A1 | Doblaje (Esp)</div>
+                    <div class="track-label english-track" style="color: #9d4edd;">A2 | Original (Ing)</div>
+                </div>
+                <div class="timeline-scroll-area" id="timeline-scroll-area">
+                    <div class="timeline-ruler" id="timeline-ruler"></div>
+                    <!-- Tracks -->
+                    <div class="timeline-track" id="track-video">
+                        <div class="timeline-block video-block" style="width: 100%;"></div>
+                    </div>
+                    <div class="timeline-track" id="track-dubbed"></div>
+                    <div class="timeline-track" id="track-english"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="app.js"></script>

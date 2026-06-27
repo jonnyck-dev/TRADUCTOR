@@ -775,16 +775,151 @@ def stream_video(task_id: str, request: Request):
 @app.get("/api/caches")
 def list_available_caches():
     valid_caches = []
-    if not os.path.exists(CACHE_DIR):
-        return []
-    for entry in os.listdir(CACHE_DIR):
-        entry_path = os.path.join(CACHE_DIR, entry)
-        if os.path.isdir(entry_path):
-            video_exists = os.path.exists(os.path.join(entry_path, "downloads", "video.mp4")) or os.path.exists(os.path.join(entry_path, "video.mp4"))
-            audio_exists = os.path.exists(os.path.join(entry_path, "downloads", "audio.wav")) or os.path.exists(os.path.join(entry_path, "downloads", "audio.wav"))
-            if video_exists and audio_exists:
-                valid_caches.append(entry)
-    return valid_caches
+    if os.path.exists(CACHE_DIR):
+        for entry in os.listdir(CACHE_DIR):
+            task_dir = os.path.join(CACHE_DIR, entry)
+            if os.path.isdir(task_dir):
+                final_video = os.path.join(task_dir, "output", "video_dubbed.mp4")
+                if os.path.exists(final_video):
+                    valid_caches.append(entry)
+    return {"status": "ok", "caches": valid_caches}
+
+
+# ==========================================
+# PHASE 4: INTERACTIVE STUDIO EDITOR API
+# ==========================================
+from pydantic import BaseModel
+import io
+
+class ReprocessRequest(BaseModel):
+    batch_index: int
+    text: str
+    speaker: str
+    vibevoice_model: str
+    vibevoice_cfg: float
+    vibevoice_steps: int
+
+@app.get("/api/studio/{task_id}/data")
+def get_studio_data(task_id: str, batch_size: int = 5):
+    whisper_dir = os.path.join(CACHE_DIR, task_id, "whisper")
+    enhanced_json = os.path.join(whisper_dir, "spanish_enhanced.json")
+    if not os.path.exists(enhanced_json):
+        enhanced_json = os.path.join(whisper_dir, "spanish_translated.json")
+        if not os.path.exists(enhanced_json):
+            raise HTTPException(status_code=404, detail="Data not ready")
+            
+    with open(enhanced_json, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    chunks = data.get("chunks", [])
+    
+    batches = []
+    from audio_processor import get_flat_timestamp
+    for i in range(0, len(chunks), batch_size):
+        batch = chunks[i:i+batch_size]
+        merged_text = " ".join([c.get("text", "").strip() for c in batch if c.get("text", "").strip()])
+        if not merged_text:
+            continue
+            
+        start_time = get_flat_timestamp(batch[0].get("timestamp", [0.0, 0.0]))[0]
+        end_time = get_flat_timestamp(batch[-1].get("timestamp", [0.0, 0.0]))[1]
+        
+        batches.append({
+            "batch_index": i // batch_size,
+            "text": merged_text,
+            "start_time": start_time,
+            "end_time": end_time,
+            "phrases": batch
+        })
+    return {"status": "ok", "batches": batches}
+
+@app.get("/api/studio/{task_id}/audio/original")
+def get_original_audio_slice(task_id: str, start: float, end: float):
+    from pydub import AudioSegment
+    vocals_path = os.path.join(CACHE_DIR, task_id, "demucs", "htdemucs", "audio", "vocals.wav")
+    if not os.path.exists(vocals_path):
+        raise HTTPException(status_code=404, detail="Original vocals not found")
+        
+    audio = AudioSegment.from_file(vocals_path)
+    # Add a 200ms padding for context
+    slice_audio = audio[max(0, (start - 0.2) * 1000) : (end + 0.2) * 1000]
+    
+    buf = io.BytesIO()
+    slice_audio.export(buf, format="mp3", bitrate="128k")
+    buf.seek(0)
+    
+    headers = {"Cache-Control": "public, max-age=3600"}
+    return StreamingResponse(buf, media_type="audio/mpeg", headers=headers)
+
+@app.get("/api/studio/{task_id}/audio/dubbed/{batch_index}")
+def get_dubbed_audio(task_id: str, batch_index: int):
+    # Ensure cache busting
+    path_mp3 = os.path.join(CACHE_DIR, task_id, "tts", f"phrase_{batch_index}.mp3")
+    path_wav = os.path.join(CACHE_DIR, task_id, "tts", f"phrase_{batch_index}.wav")
+    
+    headers = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
+    if os.path.exists(path_mp3):
+        return FileResponse(path_mp3, headers=headers)
+    elif os.path.exists(path_wav):
+        return FileResponse(path_wav, headers=headers)
+    else:
+        raise HTTPException(status_code=404, detail="Dubbed audio not found for this block")
+
+@app.post("/api/studio/{task_id}/reprocess")
+def reprocess_studio_block(task_id: str, req: ReprocessRequest, batch_size: int = 5):
+    """Regenerates the TTS for a specific block and updates the JSON script."""
+    tts_dir = os.path.join(CACHE_DIR, task_id, "tts")
+    os.makedirs(tts_dir, exist_ok=True)
+    
+    # 1. Update spanish_enhanced.json
+    enhanced_json = os.path.join(CACHE_DIR, task_id, "whisper", "spanish_enhanced.json")
+    if os.path.exists(enhanced_json):
+        with open(enhanced_json, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        
+        start_idx = req.batch_index * batch_size
+        if start_idx < len(data["chunks"]):
+            data["chunks"][start_idx]["text"] = req.text
+            for i in range(start_idx + 1, min(start_idx + batch_size, len(data["chunks"]))):
+                data["chunks"][i]["text"] = ""
+                
+            with open(enhanced_json, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+                
+    # 2. Call VibeVoice API directly for this single phrase
+    import requests
+    url = "http://127.0.0.1:8001/api/tts"
+    payload = {
+        "text": req.text,
+        "model": req.vibevoice_model,
+        "cfg": req.vibevoice_cfg,
+        "steps": req.vibevoice_steps
+    }
+    
+    try:
+        res = requests.post(url, json=payload, timeout=120)
+        if res.status_code != 200:
+            raise HTTPException(status_code=500, detail="VibeVoice TTS generation failed")
+            
+        output_mp3 = os.path.join(tts_dir, f"phrase_{req.batch_index}.mp3")
+        with open(output_mp3, 'wb') as f:
+            f.write(res.content)
+            
+        return {"status": "ok", "message": f"Block {req.batch_index} regenerated successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/studio/{task_id}/finalize")
+def finalize_studio_video(task_id: str):
+    """Prepares the project for final assembly by clearing the old video outputs."""
+    output_video = os.path.join(CACHE_DIR, task_id, "output", "video_dubbed.mp4")
+    verification_report = os.path.join(CACHE_DIR, task_id, "whisper", "verification_report.json")
+    
+    if os.path.exists(output_video):
+        os.remove(output_video)
+    if os.path.exists(verification_report):
+        os.remove(verification_report)
+        
+    return {"status": "ok", "message": "Listo para ensamblar. Presiona el botón Traducir (Simular) para generar el video final."}
 
 # Mount video cache directory
 app.mount("/cache", StaticFiles(directory=CACHE_DIR), name="cache")
