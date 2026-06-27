@@ -487,72 +487,92 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, v
             tts_chunks_for_sync = tts_chunks
             mp3_paths_for_sync = mp3_paths
         
-        # 5. Overlay, synchronize and speed up chunks (Splicing, stretching and overlaying)
-        t0 = time.time()
-        tasks[task_id]["status"] = "synchronizing"
-        tasks[task_id]["progress"] = 85
-        synced_wav_path = os.path.join(output_dir, "dubbed_synced.wav")
-        sync_individual_phrases(tts_chunks_for_sync, mp3_paths_for_sync, synced_wav_path, duration_sec)
-        step_times["5_synchronization"] = time.time() - t0
-        
-        # 5b. Mix synced Spanish voice and original background instrumental track
-        t0 = time.time()
-        mixed_wav_path = os.path.join(output_dir, "dubbed_mixed.wav")
-        mix_voice_and_background(synced_wav_path, background_wav_path, mixed_wav_path)
-        step_times["5b_audio_mixing"] = time.time() - t0
-        
-        # 6. Merge dubbed audio and original video track (removing orig audio)
-        t0 = time.time()
-        tasks[task_id]["status"] = "merging"
-        tasks[task_id]["progress"] = 90
         output_video_path = os.path.join(output_dir, "video_dubbed.mp4")
-        merge_audio_video(video_path, mixed_wav_path, output_video_path)
-        step_times["6_video_merging"] = time.time() - t0
-        
-        # 7. QA Verification: transcribe final dubbed WAV and compare against Spanish translation
-        t0 = time.time()
-        tasks[task_id]["status"] = "verifying"
-        tasks[task_id]["progress"] = 95
-        print("Starting QA Verification...")
-        
-        verification_json_path = os.path.join(whisper_dir, "spanish_whisper_verification.json")
-        verification_data = transcribe_audio(synced_wav_path, verification_json_path, language="Spanish")
-        
-        expected_text = translated_data.get("text", "").strip()
-        actual_text = verification_data.get("text", "").strip()
-        
-        norm_expected = normalize_text(expected_text)
-        norm_actual = normalize_text(actual_text)
-        
-        import difflib
-        matcher = difflib.SequenceMatcher(None, norm_expected, norm_actual)
-        ratio = matcher.ratio()
-        
-        passed = bool(ratio >= 0.90)
-        verification_report = {
-            "accuracy_ratio": ratio,
-            "passed": passed,
-            "expected_text": expected_text,
-            "actual_text": actual_text,
-            "normalized_expected": norm_expected,
-            "normalized_actual": norm_actual
-        }
-        
         verification_report_path = os.path.join(whisper_dir, "verification_report.json")
-        with open(verification_report_path, "w", encoding="utf-8") as f:
-            json.dump(verification_report, f, ensure_ascii=False, indent=2)
-            
-        print(f"QA Verification completed: Accuracy: {ratio*100:.2f}%. Passed: {passed}")
-        step_times["7_qa_verification"] = time.time() - t0
-        
-        # Calculate total task duration
-        total_task_time = time.time() - start_task_time
-        step_times["total_duration"] = total_task_time
-        
-        # Save timing report
         timing_report_path = os.path.join(output_dir, "timing_report.json")
-        with open(timing_report_path, "w", encoding="utf-8") as f:
-            json.dump(step_times, f, ensure_ascii=False, indent=2)
+
+        if not os.path.exists(output_video_path) or not os.path.exists(verification_report_path):
+            # 5. Overlay, synchronize and speed up chunks (Splicing, stretching and overlaying)
+            t0 = time.time()
+            tasks[task_id]["status"] = "synchronizing"
+            tasks[task_id]["progress"] = 85
+            synced_wav_path = os.path.join(output_dir, "dubbed_synced.wav")
+            sync_individual_phrases(tts_chunks_for_sync, mp3_paths_for_sync, synced_wav_path, duration_sec)
+            step_times["5_synchronization"] = time.time() - t0
+            
+            # 5b. Mix synced Spanish voice and original background instrumental track
+            t0 = time.time()
+            mixed_wav_path = os.path.join(output_dir, "dubbed_mixed.wav")
+            mix_voice_and_background(synced_wav_path, background_wav_path, mixed_wav_path)
+            step_times["5b_audio_mixing"] = time.time() - t0
+            
+            # 6. Merge dubbed audio and original video track (removing orig audio)
+            t0 = time.time()
+            tasks[task_id]["status"] = "merging"
+            tasks[task_id]["progress"] = 90
+            merge_audio_video(video_path, mixed_wav_path, output_video_path)
+            step_times["6_video_merging"] = time.time() - t0
+            
+            # 7. QA Verification: transcribe final dubbed WAV and compare against Spanish translation
+            t0 = time.time()
+            tasks[task_id]["status"] = "verifying"
+            tasks[task_id]["progress"] = 95
+            print("Starting QA Verification...")
+            
+            verification_json_path = os.path.join(whisper_dir, "spanish_whisper_verification.json")
+            verification_data = transcribe_audio(synced_wav_path, verification_json_path, language="Spanish")
+            
+            expected_text = translated_data.get("text", "").strip()
+            actual_text = verification_data.get("text", "").strip()
+            
+            norm_expected = normalize_text(expected_text)
+            norm_actual = normalize_text(actual_text)
+            
+            import difflib
+            matcher = difflib.SequenceMatcher(None, norm_expected, norm_actual)
+            ratio = matcher.ratio()
+            
+            passed = bool(ratio >= 0.90)
+            verification_report = {
+                "accuracy_ratio": ratio,
+                "passed": passed,
+                "expected_text": expected_text,
+                "actual_text": actual_text,
+                "normalized_expected": norm_expected,
+                "normalized_actual": norm_actual
+            }
+            
+            with open(verification_report_path, "w", encoding="utf-8") as f:
+                json.dump(verification_report, f, ensure_ascii=False, indent=2)
+                
+            print(f"QA Verification completed: Accuracy: {ratio*100:.2f}%. Passed: {passed}")
+            step_times["7_qa_verification"] = time.time() - t0
+            
+            # Calculate total task duration
+            total_task_time = time.time() - start_task_time
+            step_times["total_duration"] = total_task_time
+            
+            # Save timing report
+            with open(timing_report_path, "w", encoding="utf-8") as f:
+                json.dump(step_times, f, ensure_ascii=False, indent=2)
+                
+        else:
+            print("Video and QA report already exist. Skipping sync, merge, and QA steps.")
+            
+            # Load existing timing report
+            if os.path.exists(timing_report_path):
+                with open(timing_report_path, "r", encoding="utf-8") as f:
+                    step_times = json.load(f)
+                    total_task_time = step_times.get("total_duration", 0.0)
+            else:
+                total_task_time = 0.0
+                step_times["total_duration"] = total_task_time
+                
+            # Load existing QA report
+            with open(verification_report_path, "r", encoding="utf-8") as f:
+                qa_data = json.load(f)
+                ratio = qa_data.get("accuracy_ratio", 1.0)
+                passed = qa_data.get("passed", True)
             
         # Print a beautiful summary of timers in the console
         print("\n" + "="*50)

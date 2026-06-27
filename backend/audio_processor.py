@@ -324,7 +324,7 @@ def merge_audio_video(video_path: str, audio_path: str, output_video_path: str) 
     ffmpeg = get_ffmpeg_cmd()
     cmd = (
         f'{ffmpeg} -y -i "{video_path}" -i "{audio_path}" '
-        f'-c:v copy -map 0:v:0 -map 1:a:0 -c:a aac -shortest "{output_video_path}"'
+        f'-c:v copy -map 0:v:0 -map 1:a:0 -c:a aac -shortest -movflags +faststart "{output_video_path}"'
     )
     print(f"Merging video and audio: {cmd}")
     subprocess.run(cmd, shell=True, capture_output=True)
@@ -581,8 +581,8 @@ def mix_voice_and_background(vocals_path: str, background_path: str, output_path
     vocals = AudioSegment.from_wav(vocals_path)
     background = AudioSegment.from_wav(background_path)
     
-    # We decrease the background volume by 3dB to make sure vocals are clear
-    background_adjusted = background - 3
+    # We decrease the background volume by 1dB to make sure vocals are clear without losing original mix
+    background_adjusted = background - 1
     
     # Overlay vocals on background. This preserves the sample rate/stereo of the background.
     mixed = background_adjusted.overlay(vocals)
@@ -762,12 +762,12 @@ def process_super_audio_with_whisperx(mp3_paths: list, original_chunks: list, sy
             "original_chunks": block
         })
 
-    # 4. Find timestamps for each sync_chunk block in the super audio
+    # 4. Find raw timestamps for each sync_chunk block in the super audio
     if not wx_words:
         print("No word timestamps found. Falling back to simple proportional split.")
         return proportional_super_split(super_audio, sync_chunks, output_dir), sync_chunks
 
-    split_timestamps = []
+    raw_blocks = []
     current_wx_idx = 0
     
     for chunk in sync_chunks:
@@ -780,17 +780,37 @@ def process_super_audio_with_whisperx(mp3_paths: list, original_chunks: list, sy
         end_idx = min(current_wx_idx + words_in_block - 1, len(wx_words) - 1)
         end_time = wx_words[end_idx]["end"] if current_wx_idx < len(wx_words) else start_time + 1.0
         
-        split_timestamps.append((start_time, end_time))
+        raw_blocks.append((start_time, end_time))
         current_wx_idx = end_idx + 1
 
-    # 5. Slice with 300ms safety margins and 25ms anti-clicking fades
+    # 5. Calculate exact non-overlapping boundaries using midpoints to prevent 'broken record' repetition
+    exact_boundaries = []
+    for i in range(len(raw_blocks)):
+        # Start boundary
+        if i == 0:
+            b_start = max(0.0, raw_blocks[i][0] - 0.2) # Pad start of first block
+        else:
+            prev_end = raw_blocks[i-1][1]
+            curr_start = raw_blocks[i][0]
+            b_start = (prev_end + curr_start) / 2.0
+            
+        # End boundary
+        if i == len(raw_blocks) - 1:
+            b_end = raw_blocks[i][1] + 0.2 # Pad end of last block
+        else:
+            curr_end = raw_blocks[i][1]
+            next_start = raw_blocks[i+1][0]
+            b_end = (curr_end + next_start) / 2.0
+            
+        exact_boundaries.append((b_start, b_end))
+
+    # 6. Slice with ZERO overlap and 10ms anti-clicking fades
     sliced_paths = []
-    margin_s = 0.3  # 300ms padding
-    fade_ms = 25    # 25ms cross-fade
+    fade_ms = 10
     
-    for i, (start, end) in enumerate(split_timestamps):
-        slice_start = max(0, int((start - margin_s) * 1000))
-        slice_end = min(len(super_audio), int((end + margin_s) * 1000))
+    for i, (start, end) in enumerate(exact_boundaries):
+        slice_start = max(0, int(start * 1000))
+        slice_end = min(len(super_audio), int(end * 1000))
         
         if slice_end <= slice_start:
             slice_end = slice_start + 500

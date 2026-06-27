@@ -99,5 +99,10 @@ El servidor web premium estará disponible en: **👉 [http://localhost:8000](ht
 La UI cuenta con un diseño glassmorphic moderno y oscuro que ofrece:
 - **Selector Dinámico de Modelos de Traducción**: Ejecuta `ollama list` y llama a la API `/api/tags` en tiempo real para listar y agrupar tus modelos locales y modelos cloud (como DeepSeek, Qwen o Nemotron).
 - **Panel Visual de Timers**: Muestra barras de progreso y tiempos detallados de cada etapa del pipeline (Descarga, Demucs, WhisperX, Traducción, TTS y Fusión final) tras terminar el doblaje.
-- **Visor de Subtítulos**: Muestra la transcripción en inglés y traducción en español sincronizada con el reproductor de video interactivo.
-- **Simulador de Caché**: Permite depurar y reproducir flujos de prueba sin consumir llamadas de red o GPU redundantes.
+- **Visor de Subtítulos (Click-to-Seek)**: Muestra la transcripción en inglés y traducción en español sincronizada. Al hacer clic sobre cualquier frase, el reproductor de video nativo saltará automáticamente al segundo exacto de inicio. (Incluye un botón <i class="fa-solid fa-eye"></i> para ocultar/mostrar la caja y mantener la interfaz limpia).
+- **Restricciones Inteligentes de Procesamiento**: La UI vincula dinámicamente el `Sync Size` al `Batch Size`, evitando configuraciones ilógicas y previniendo que el servidor entre en bucles de recorte redundantes.
+- **Simulador de Caché (Idempotente por Fases)**: Permite depurar y reproducir flujos de prueba sin consumir llamadas de red o GPU redundantes.
+  - *Bug Fix (v2.0)*: El backend ahora verifica la existencia del archivo `video_dubbed.mp4` y el reporte QA; si ambos existen, el sistema omite instantáneamente la sincronización, mezcla, renderizado de FFmpeg y QA, reduciendo el tiempo de recarga de 150 segundos a 0.001 segundos.
+  - *Midpoint Slicing (v2.1)*: El recorte de audio usa cálculo de punto medio (Zero-Overlap) y fades de 10ms, eliminando por completo el efecto de "disco rayado" o tartamudeo en las uniones fonéticas.
+  - *Mix de Audio Profesional (v2.1)*: La música de fondo se reduce a -1dB (en lugar de -3dB) para proteger y resaltar el diseño de sonido original del creador.
+  - *Optimización Web-Streaming*: La compilación final mediante FFmpeg incluye la bandera `-movflags +faststart` para mover el `moov atom` al inicio del MP4, destrabando la barra de navegación del navegador (seek-bar) y evitando que el video reinicie la carga al saltar a un punto lejano.

@@ -32,6 +32,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     inputBatchSize.addEventListener('input', () => {
         valBatchSize.textContent = inputBatchSize.value;
+        // Link Sync Size constraint to Batch Size to prevent redundant processing
+        inputSyncSize.max = inputBatchSize.value;
+        if (parseInt(inputSyncSize.value) > parseInt(inputBatchSize.value)) {
+            inputSyncSize.value = inputBatchSize.value;
+            valSyncSize.textContent = inputSyncSize.value;
+        }
     });
     inputSyncSize.addEventListener('input', () => {
         valSyncSize.textContent = inputSyncSize.value;
@@ -63,6 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const subtitlesViewport = document.getElementById('subtitles-viewport');
     const btnShowOriginal = document.getElementById('btn-show-original');
     const btnShowTranslated = document.getElementById('btn-show-translated');
+    const btnTogglePanel = document.getElementById('btn-toggle-panel');
 
     let pollInterval = null;
     let subtitleData = [];
@@ -76,6 +83,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const s = Math.floor(seconds % 60).toString().padStart(2, '0');
         return `${m}:${s}`;
     }
+
+    // Toggle Subtitles Viewport Visibility
+    btnTogglePanel.addEventListener('click', () => {
+        const isHidden = subtitlesViewport.classList.contains('hidden');
+        if (isHidden) {
+            subtitlesViewport.classList.remove('hidden');
+            btnTogglePanel.classList.add('active');
+            btnTogglePanel.innerHTML = '<i class="fa-solid fa-eye"></i>';
+        } else {
+            subtitlesViewport.classList.add('hidden');
+            btnTogglePanel.classList.remove('active');
+            btnTogglePanel.innerHTML = '<i class="fa-solid fa-eye-slash"></i>';
+        }
+    });
 
     // Toggle English/Spanish displays
     btnShowOriginal.addEventListener('click', () => {
@@ -591,10 +612,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const activeLine = lines[activeIndex];
                 if (activeLine) {
                     activeLine.classList.add('active');
-                    // Scroll into view inside viewport
-                    activeLine.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'nearest'
+                    
+                    // Scroll safely inside the viewport without jumping the main page
+                    const subtitlesViewport = document.getElementById('subtitles-viewport');
+                    const offset = activeLine.offsetTop - subtitlesViewport.offsetTop;
+                    
+                    subtitlesViewport.scrollTo({
+                        top: Math.max(0, offset - 40), // 40px padding from the top
+                        behavior: 'smooth'
                     });
                 }
             }
