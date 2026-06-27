@@ -105,4 +105,6 @@ La UI cuenta con un diseño glassmorphic moderno y oscuro que ofrece:
   - *Bug Fix (v2.0)*: El backend ahora verifica la existencia del archivo `video_dubbed.mp4` y el reporte QA; si ambos existen, el sistema omite instantáneamente la sincronización, mezcla, renderizado de FFmpeg y QA, reduciendo el tiempo de recarga de 150 segundos a 0.001 segundos.
   - *Midpoint Slicing (v2.1)*: El recorte de audio usa cálculo de punto medio (Zero-Overlap) y fades de 10ms, eliminando por completo el efecto de "disco rayado" o tartamudeo en las uniones fonéticas.
   - *Mix de Audio Profesional (v2.1)*: La música de fondo se reduce a -1dB (en lugar de -3dB) para proteger y resaltar el diseño de sonido original del creador.
-  - *Optimización Web-Streaming*: La compilación final mediante FFmpeg incluye la bandera `-movflags +faststart` para mover el `moov atom` al inicio del MP4, destrabando la barra de navegación del navegador (seek-bar) y evitando que el video reinicie la carga al saltar a un punto lejano.
+  - *Optimización Web-Streaming (v2.1)*: 
+    - La compilación final mediante FFmpeg incluye la bandera `-movflags +faststart` para mover el `moov atom` al inicio del MP4.
+    - Se implementó un motor de streaming personalizado en FastAPI (`/api/stream`) que inyecta manualmente cabeceras HTTP 206 Partial Content (Accept-Ranges). Esto permite que navegadores basados en Chromium (Chrome, Brave) puedan adelantar la barra de navegación (seek-bar) libremente sin reiniciar la carga del video.

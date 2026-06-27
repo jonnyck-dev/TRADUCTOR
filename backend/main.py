@@ -589,7 +589,7 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, v
         tasks[task_id]["status"] = "completed"
         tasks[task_id]["progress"] = 100
         tasks[task_id]["result"] = {
-            "video_url": f"/cache/{task_id}/video_dubbed.mp4",
+            "video_url": f"/api/stream/{task_id}?t={int(time.time())}",
             "original_json": orig_data,
             "translated_json": translated_data,
             "timing_report": step_times,
@@ -696,6 +696,61 @@ def get_ollama_models():
             "nemotron-3-nano:30b-cloud"
         ]
     }
+
+import re
+from fastapi import Request
+from fastapi.responses import StreamingResponse
+
+@app.get("/api/stream/{task_id}")
+def stream_video(task_id: str, request: Request):
+    video_path = os.path.join(CACHE_DIR, task_id, "video_dubbed.mp4")
+    if not os.path.exists(video_path):
+        raise HTTPException(status_code=404, detail="Video not found")
+        
+    file_size = os.path.getsize(video_path)
+    range_header = request.headers.get("range")
+    
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Type": "video/mp4",
+        "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges",
+        "Cache-Control": "no-cache",
+    }
+    
+    if not range_header:
+        headers["Content-Length"] = str(file_size)
+        return FileResponse(video_path, headers=headers)
+        
+    try:
+        byte1, byte2 = 0, None
+        match = re.search(r'bytes=(\d+)-(\d*)', range_header)
+        if match:
+            byte1 = int(match.group(1))
+            if match.group(2):
+                byte2 = int(match.group(2))
+    except Exception:
+        byte1 = 0
+        
+    if byte2 is None or byte2 >= file_size:
+        byte2 = file_size - 1
+        
+    length = byte2 - byte1 + 1
+    headers["Content-Length"] = str(length)
+    headers["Content-Range"] = f"bytes {byte1}-{byte2}/{file_size}"
+    
+    def file_iterator():
+        with open(video_path, "rb") as f:
+            f.seek(byte1)
+            remaining = length
+            chunk_size = 1024 * 1024
+            while remaining > 0:
+                chunk = f.read(min(chunk_size, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+                yield chunk
+
+    return StreamingResponse(file_iterator(), status_code=206, headers=headers)
 
 @app.get("/api/caches")
 def list_available_caches():
