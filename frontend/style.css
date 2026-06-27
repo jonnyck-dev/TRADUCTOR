@@ -776,10 +776,6 @@ video {
    STUDIO VIEW v3.0 (Horizontal Timeline)
    ========================================= */
 
-.view-active {
-    display: grid !important;
-}
-
 .hidden {
     display: none !important;
 }
@@ -789,7 +785,7 @@ video {
     height: 100vh;
     display: flex;
     flex-direction: column;
-    background-color: var(--bg-main);
+    background-color: var(--bg-dark);
     z-index: 1000;
     position: fixed;
     top: 0;
