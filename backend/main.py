@@ -778,10 +778,8 @@ def list_available_caches():
     if os.path.exists(CACHE_DIR):
         for entry in os.listdir(CACHE_DIR):
             task_dir = os.path.join(CACHE_DIR, entry)
-            if os.path.isdir(task_dir):
-                final_video = os.path.join(task_dir, "video_dubbed.mp4")
-                if os.path.exists(final_video):
-                    valid_caches.append(entry)
+            if os.path.isdir(task_dir) and entry != "benchmark_runs":
+                valid_caches.append(entry)
     return {"status": "ok", "caches": valid_caches}
 
 
