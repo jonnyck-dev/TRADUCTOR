@@ -883,14 +883,40 @@ def reprocess_studio_block(task_id: str, req: ReprocessRequest, batch_size: int 
             with open(enhanced_json, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
                 
-    # 2. Call VibeVoice API directly for this single phrase
+    # 2. Extract specific vocal slice with ffmpeg
+    from audio_processor import get_flat_timestamp
+    import subprocess
+    from tts_client import wsl_to_windows_path
+    
+    start_time = 0.0
+    end_time = 5.0
+    if os.path.exists(enhanced_json):
+        batch_chunks = data["chunks"][start_idx:min(start_idx + batch_size, len(data["chunks"]))]
+        if batch_chunks:
+            start_time = get_flat_timestamp(batch_chunks[0].get("timestamp", [0.0, 0.0]))[0]
+            end_time = get_flat_timestamp(batch_chunks[-1].get("timestamp", [0.0, 0.0]))[1]
+            
+    vocals_path = os.path.join(CACHE_DIR, task_id, "demucs", "htdemucs", "audio", "vocals.wav")
+    ref_wav = os.path.join(tts_dir, f"ref_{req.batch_index}.wav")
+    if os.path.exists(vocals_path):
+        cmd = ["ffmpeg", "-y", "-i", vocals_path, "-ss", str(start_time), "-to", str(end_time), "-c", "copy", ref_wav]
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+    # 3. Call VibeVoice API directly for this single phrase
     import requests
     url = "http://127.0.0.1:8001/api/tts"
+    
+    temp_wav = os.path.join(tts_dir, f"phrase_{req.batch_index}_raw.wav")
+    win_temp_wav = wsl_to_windows_path(temp_wav)
+    win_ref_wav = wsl_to_windows_path(ref_wav) if os.path.exists(ref_wav) else None
+    
     payload = {
         "text": req.text,
-        "model": req.vibevoice_model,
-        "cfg": req.vibevoice_cfg,
-        "steps": req.vibevoice_steps
+        "speaker": req.speaker,
+        "output_path": win_temp_wav,
+        "cfg_value": req.vibevoice_cfg,
+        "inference_timesteps": req.vibevoice_steps,
+        "reference_wav_path": win_ref_wav if "Voz Clonada" in req.speaker else None
     }
     
     try:
@@ -899,8 +925,13 @@ def reprocess_studio_block(task_id: str, req: ReprocessRequest, batch_size: int 
             raise HTTPException(status_code=500, detail="VibeVoice TTS generation failed")
             
         output_mp3 = os.path.join(tts_dir, f"phrase_{req.batch_index}.mp3")
-        with open(output_mp3, 'wb') as f:
-            f.write(res.content)
+        output_wav = os.path.join(tts_dir, f"phrase_{req.batch_index}.wav")
+        if os.path.exists(output_mp3):
+            os.remove(output_mp3)
+        if os.path.exists(temp_wav):
+            if os.path.exists(output_wav):
+                os.remove(output_wav)
+            os.rename(temp_wav, output_wav)
             
         return {"status": "ok", "message": f"Block {req.batch_index} regenerated successfully."}
     except Exception as e:
