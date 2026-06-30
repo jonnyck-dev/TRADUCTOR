@@ -423,6 +423,35 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, v
         t0 = time.time()
         tasks[task_id]["status"] = "synthesizing"
         tasks[task_id]["progress"] = 75
+        
+        # Guardián de Estado: Prevenir desincronización por cambios de Batch/Sync Size
+        render_state_path = os.path.join(tts_dir, "render_state.json")
+        current_state = {
+            "tts_mode": tts_mode,
+            "batch_size": batch_size,
+            "sync_size": sync_size
+        }
+        if os.path.exists(render_state_path):
+            try:
+                with open(render_state_path, "r", encoding="utf-8") as f:
+                    last_state = json.load(f)
+                if last_state.get("batch_size") != batch_size or last_state.get("sync_size") != sync_size or last_state.get("tts_mode") != tts_mode:
+                    print(f"[TTS] Alerta: Cambio de configuración detectado {last_state} -> {current_state}. Limpiando caché TTS antigua para evitar desincronización.")
+                    import shutil
+                    if os.path.exists(tts_dir):
+                        for f_name in os.listdir(tts_dir):
+                            if f_name.endswith(".mp3") or f_name.endswith(".wav") or f_name.endswith(".json"):
+                                try: os.remove(os.path.join(tts_dir, f_name))
+                                except: pass
+                    sync_dir = os.path.join(output_dir, "sync")
+                    if os.path.exists(sync_dir):
+                        shutil.rmtree(sync_dir, ignore_errors=True)
+            except Exception as e:
+                print(f"[TTS] Error leyendo render_state.json: {e}")
+                
+        with open(render_state_path, "w", encoding="utf-8") as f:
+            json.dump(current_state, f)
+
         if speaker == "cloned_speaker":
             # Extract 1 minute sample from clean vocals wav instead of noisy original audio
             prepare_cloned_voice(vocals_wav_path, orig_json_path)
