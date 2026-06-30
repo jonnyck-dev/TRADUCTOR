@@ -404,8 +404,11 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, v
                     json.dump(raw_data, f, ensure_ascii=False, indent=2)
             
             # 3b. Sanitize and enhance translation for TTS (Anti-Collapse)
-            from translator import enhance_translation_for_tts
+            from translator import enhance_translation_for_tts, synchronize_translation_for_tts
             translated_chunks = enhance_translation_for_tts(raw_translated_chunks, model=model)
+            
+            # 3c. Math Sync: Ensure words fit in their allotted timestamp
+            translated_chunks = synchronize_translation_for_tts(translated_chunks, model=model)
             
             translated_data = {
                 "text": " ".join([c.get("text", "") for c in translated_chunks]),

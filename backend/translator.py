@@ -284,6 +284,7 @@ def translate_chunks(chunks: list, model: str = "gemma4:e2b-it-qat", save_dir: s
         merged_chunks = []
         for orig, trans in zip(chunks, reconstructed_chunks):
             new_chunk = dict(orig)
+            new_chunk["orig_text"] = orig.get("text")
             new_chunk["text"] = trans.get("text", orig.get("text"))
             merged_chunks.append(new_chunk)
             
