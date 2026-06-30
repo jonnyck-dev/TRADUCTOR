@@ -81,8 +81,12 @@ def merge_short_chunks(chunks: list) -> list:
         if duration < 0.4 or word_count <= 1 or (gap < 0.15 and duration < 15.0):
             print(f"Merging chunk: '{current_chunk.get('text', '').strip()}' (Dur: {duration:.2f}s, Gap: {gap:.2f}s) into next chunk.")
             
-            # Combine text
+            # Combine text (Removing trailing punctuation from the first chunk to avoid confusing the translator)
+            import re
             current_text = current_chunk.get("text", "").strip()
+            # Strip trailing ., ?, ! to make it a continuous fluid sentence
+            current_text = re.sub(r'[.?!]+$', '', current_text).strip()
+            
             next_text = chunk.get("text", "").strip()
             if current_text and next_text:
                 current_chunk["text"] = current_text + " " + next_text
