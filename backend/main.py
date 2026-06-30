@@ -346,7 +346,22 @@ def prepare_cloned_voice(audio_path: str, whisper_json_path: str):
         audio = AudioSegment.from_wav(audio_path)
         
         start_ms = int(start_sec * 1000)
-        end_ms = start_ms + 60000  # 60 segundos
+        
+        # Lógica especial y cimientos para "Editor por Slices"
+        is_local_path = os.path.join(os.path.dirname(audio_path), "is_local.txt")
+        if os.path.exists(is_local_path):
+            if len(audio) <= 15000:
+                sample_duration = len(audio) - start_ms
+                print(f"[Voice Cloning] Modo Slice detectado (<15s). Usando muestra total de {sample_duration/1000:.2f} segundos.")
+            elif len(audio) <= 35000:
+                sample_duration = 15000
+                print("[Voice Cloning] Video local corto detectado. Extrayendo muestra optimizada de 15 segundos.")
+            else:
+                sample_duration = 60000
+        else:
+            sample_duration = 60000
+            
+        end_ms = start_ms + sample_duration
         end_ms = min(end_ms, len(audio))
         
         print(f"Recortando desde {start_sec:.2f}s hasta {end_ms/1000:.2f}s...")
@@ -732,6 +747,10 @@ async def upload_local_video(file: UploadFile = File(...)):
         audio_path = os.path.join(downloads_dir, "audio.wav")
         cmd = f'ffmpeg -y -i "{video_path}" -vn -acodec pcm_s16le -ar 24000 -ac 1 "{audio_path}"'
         subprocess.run(cmd, shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        # Etiqueta secreta para diferenciarlo de YouTube
+        with open(os.path.join(downloads_dir, "is_local.txt"), "w") as f:
+            f.write("True")
         
         return {"status": "ok", "task_id": task_id}
     except Exception as e:
