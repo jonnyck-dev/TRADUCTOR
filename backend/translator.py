@@ -363,11 +363,6 @@ def enhance_translation_for_tts(chunks: list, model: str) -> list:
         data = json.loads(content)
         sanitized_chunks = data.get("chunks", [])
         
-        # Security Check: Enforce structural integrity
-        if len(sanitized_chunks) != len(chunks):
-            print(f"[Sanador IA] ALERTA: La IA modificó la cantidad de segmentos ({len(sanitized_chunks)} vs {len(chunks)}). Abortando limpieza para proteger la sincronización.")
-            return chunks
-            
         # Map back safely by index
         sanitized_by_index = {c.get("index"): c.get("text", "") for c in sanitized_chunks}
         

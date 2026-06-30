@@ -73,8 +73,8 @@ def merge_short_chunks(chunks: list) -> list:
         duration = end - start
         word_count = len(current_chunk.get("text", "").strip().split())
         
-        # If the current chunk is too short, merge it with the incoming chunk
-        if duration < 0.8 or word_count <= 2:
+        # Merge if it's a single word (monosyllable) OR if the duration is extremely short (< 0.4s)
+        if duration < 0.4 or word_count <= 1:
             print(f"Merging short chunk: '{current_chunk.get('text', '').strip()}' ({duration:.2f}s) into next chunk.")
             next_ts = chunk.get("timestamp", [0.0, 0.0])
             
