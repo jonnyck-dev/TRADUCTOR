@@ -52,6 +52,53 @@ class ProcessRequest(BaseModel):
     batch_size: int = 15
     sync_size: int = 5
 
+def merge_short_chunks(chunks: list) -> list:
+    """
+    Merges very short chunks (e.g., duration < 0.8s or <= 2 words) with the next chunk
+    to prevent TTS engine failures on monosyllables.
+    """
+    if not chunks:
+        return []
+        
+    merged = []
+    current_chunk = None
+    
+    for chunk in chunks:
+        if current_chunk is None:
+            current_chunk = dict(chunk)
+            continue
+            
+        ts = current_chunk.get("timestamp", [0.0, 0.0])
+        start, end = ts[0], ts[1]
+        duration = end - start
+        word_count = len(current_chunk.get("text", "").strip().split())
+        
+        # If the current chunk is too short, merge it with the incoming chunk
+        if duration < 0.8 or word_count <= 2:
+            print(f"Merging short chunk: '{current_chunk.get('text', '').strip()}' ({duration:.2f}s) into next chunk.")
+            next_ts = chunk.get("timestamp", [0.0, 0.0])
+            
+            # Combine text
+            current_text = current_chunk.get("text", "").strip()
+            next_text = chunk.get("text", "").strip()
+            if current_text and next_text:
+                current_chunk["text"] = current_text + " " + next_text
+            elif next_text:
+                current_chunk["text"] = next_text
+                
+            # Combine timestamps
+            current_chunk["timestamp"] = [start, next_ts[1]]
+        else:
+            merged.append(current_chunk)
+            current_chunk = dict(chunk)
+            
+    if current_chunk is not None:
+        merged.append(current_chunk)
+        
+    # Run a second pass just in case the last chunk was very short and didn't get merged
+    # (Though usually it's fine if the final chunk is short, we won't overcomplicate for now)
+    return merged
+
 def preprocess_chunks(chunks: list) -> list:
     """
     Slices any segment/chunk whose duration exceeds 120 seconds into smaller sub-chunks
@@ -372,9 +419,10 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, v
             orig_data = transcribe_audio(vocals_wav_path, orig_json_path, language="English")
         step_times["2_transcription"] = time.time() - t0
             
-        # 2b. Preprocess Chunks (split segments exceeding 120s duration)
+        # 2b. Preprocess Chunks (split segments exceeding 120s duration, merge short ones)
         orig_chunks = orig_data.get("chunks", [])
-        preprocessed_chunks = preprocess_chunks(orig_chunks)
+        preprocessed_chunks = merge_short_chunks(orig_chunks)
+        preprocessed_chunks = preprocess_chunks(preprocessed_chunks)
         
         # 3. Translate JSON to Spanish using Ollama
         t0 = time.time()

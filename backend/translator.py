@@ -387,3 +387,96 @@ def enhance_translation_for_tts(chunks: list, model: str) -> list:
     except Exception as e:
         print(f"[Sanador IA] Falló la conexión o el formato ({e}). Usando traducción original.")
         return chunks
+
+def synchronize_translation_for_tts(chunks: list, model: str) -> list:
+    import json
+    import re
+    import math
+    
+    print("\n[Sanador IA] Paso 3: Sincronización Matemática de Tiempos...")
+    
+    chunks_to_sync = []
+    
+    for idx, chunk in enumerate(chunks):
+        ts = chunk.get("timestamp", [0.0, 0.0])
+        if isinstance(ts, (list, tuple)) and len(ts) == 2:
+            duration = ts[1] - ts[0]
+        else:
+            duration = 2.0
+            
+        orig_text = chunk.get("orig_text", "")
+        orig_words = len(orig_text.split()) if orig_text else int(duration * 2.5)
+        
+        # Max words is the max between duration * 2.5 and original_words * 1.25
+        max_words = int(max(math.ceil(duration * 2.5), math.ceil(orig_words * 1.25)))
+        
+        current_text = chunk.get("text", "")
+        current_words = len(current_text.split())
+        
+        # If it exceeds the limit with a small buffer, mark for reduction
+        if current_words > max_words + 1:
+            chunks_to_sync.append({
+                "index": idx,
+                "text": current_text,
+                "duration_sec": round(duration, 2),
+                "current_words": current_words,
+                "target_max_words": max_words
+            })
+            
+    if not chunks_to_sync:
+        print("[Sanador IA] Todas las frases están dentro del límite de tiempo. No se requiere sincronización.")
+        return chunks
+        
+    print(f"[Sanador IA] {len(chunks_to_sync)} frases exceden el límite. Llamando a IA Sincronizadora...")
+    
+    json_input = json.dumps(chunks_to_sync, ensure_ascii=False)
+    
+    prompt = (
+        "You are an expert audio dubbing synchronizer. The following Spanish phrases are too long to fit in their allotted video time. "
+        "Paraphrase and summarize each phrase so that its word count is less than or equal to the 'target_max_words' without losing the core meaning.\n\n"
+        "RULES:\n"
+        "1. DO NOT translate to English. Output in Spanish.\n"
+        "2. Keep the emotional tone and punctuation (!, ?, commas).\n"
+        "3. You MUST return EXACTLY the same number of items, keeping the exact same 'index' IDs.\n"
+        "4. Return ONLY a valid JSON array in the format: [{\"index\": 0, \"text\": \"...\"}, ...]\n\n"
+        f"OVERSIZED PHRASES:\n{json_input}"
+    )
+    
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
+        "format": "json",
+        "options": {
+            "num_predict": 32768,
+            "temperature": 0.2
+        }
+    }
+    
+    try:
+        url = "http://127.0.0.1:11434/api/chat"
+        res = call_ollama_api(url, payload, timeout=300)
+        content = res.get("message", {}).get("content", "").strip()
+        
+        if "<think>" in content:
+            content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+            
+        start_idx = content.find('[')
+        end_idx = content.rfind(']')
+        if start_idx != -1 and end_idx != -1:
+            content = content[start_idx:end_idx+1]
+            
+        synced_data = json.loads(content)
+        
+        # Merge back
+        for synced_item in synced_data:
+            idx = synced_item.get("index")
+            new_text = synced_item.get("text")
+            if idx is not None and new_text and 0 <= idx < len(chunks):
+                chunks[idx]["text"] = new_text
+                print(f"  [Resumido] Bloque {idx} ajustado exitosamente al límite de tiempo.")
+                
+        return chunks
+    except Exception as e:
+        print(f"[Sanador IA] Falló la sincronización: {e}. Usando texto largo original.")
+        return chunks
