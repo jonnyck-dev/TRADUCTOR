@@ -1,29 +1,31 @@
 document.addEventListener('DOMContentLoaded', () => {
     // Elements
-    const youtubeUrlInput = document.getElementById('youtube-url');
-    const localVideoFile = document.getElementById('local-video-file');
-    const btnUploadLocal = document.getElementById('btn-upload-local');
-    const btnProcess = document.getElementById('btn-process');
-    const btnStopTask = document.getElementById('btn-stop-task');
-    const btnNew = document.getElementById('btn-new');
-    const startOverlay = document.getElementById('start-overlay');
-    const processingOverlay = document.getElementById('processing-overlay');
-    const videoPlayer = document.getElementById('video-player');
+    const youtubeUrlInput = document.getElementById('youtube-url') || document.createElement('input');
+    const btnProcess = document.getElementById('btn-process') || document.createElement('button');
+    const btnStopTask = document.getElementById('btn-stop-task') || document.createElement('button');
+    const btnNew = document.getElementById('btn-new') || document.createElement('button');
+    const startOverlay = document.getElementById('start-overlay') || document.createElement('div');
+    const processingOverlay = document.getElementById('processing-overlay') || document.createElement('div');
+    let videoPlayer = document.getElementById('video-player');
     
-    const selectModel = document.getElementById('select-model');
-    const selectSpeaker = document.getElementById('select-speaker');
-    const selectVibevoiceModel = document.getElementById('select-vibevoice-model');
-    const inputVibevoiceCfg = document.getElementById('input-vibevoice-cfg');
-    const inputVibevoiceSteps = document.getElementById('input-vibevoice-steps');
-    const valVibevoiceCfg = document.getElementById('val-vibevoice-cfg');
-    const valVibevoiceSteps = document.getElementById('val-vibevoice-steps');
-    const inputBatchSize = document.getElementById('input-batch-size');
-    const valBatchSize = document.getElementById('val-batch-size');
-    const inputSyncSize = document.getElementById('input-sync-size');
-    const valSyncSize = document.getElementById('val-sync-size');
-    const selectTtsMode = document.getElementById('select-tts-mode');
-    const batchSizeGroup = document.getElementById('batch-size-group');
-    const syncSizeGroup = document.getElementById('sync-size-group');
+    const selectModel = document.getElementById('select-model') || document.createElement('select');
+    const selectSpeaker = document.getElementById('select-speaker') || document.createElement('select');
+    selectSpeaker.value = "cloned_speaker"; // Default for studio
+    const selectVibevoiceModel = document.getElementById('select-vibevoice-model') || document.createElement('select');
+    selectVibevoiceModel.value = "openbmb/VoxCPM2";
+    const inputVibevoiceCfg = document.getElementById('input-vibevoice-cfg') || document.createElement('input');
+    inputVibevoiceCfg.value = "2.0";
+    const inputVibevoiceSteps = document.getElementById('input-vibevoice-steps') || document.createElement('input');
+    inputVibevoiceSteps.value = "10";
+    const valVibevoiceCfg = document.getElementById('val-vibevoice-cfg') || document.createElement('span');
+    const valVibevoiceSteps = document.getElementById('val-vibevoice-steps') || document.createElement('span');
+    const inputBatchSize = document.getElementById('input-batch-size') || document.createElement('input');
+    const valBatchSize = document.getElementById('val-batch-size') || document.createElement('span');
+    const inputSyncSize = document.getElementById('input-sync-size') || document.createElement('input');
+    const valSyncSize = document.getElementById('val-sync-size') || document.createElement('span');
+    const selectTtsMode = document.getElementById('select-tts-mode') || document.createElement('select');
+    const batchSizeGroup = document.getElementById('batch-size-group') || document.createElement('div');
+    const syncSizeGroup = document.getElementById('sync-size-group') || document.createElement('div');
 
     // Update range slider labels on input
     inputVibevoiceCfg.addEventListener('input', () => {
@@ -243,57 +245,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnProcessStudio) {
         btnProcessStudio.addEventListener('click', () => {
             if (chkUseCache.checked && selectCache.value) {
-                window.open(`/studio?task_id=${selectCache.value}`, '_blank');
+                currentTaskId = selectCache.value;
+                if (typeof openStudioView === 'function') {
+                    openStudioView();
+                } else {
+                    document.getElementById('btn-open-studio').click();
+                }
             } else {
-                alert("Por favor selecciona una caché de video existente para abrir en el Modo Estudio.");
+                openStudioOnLoad = true;
+                btnProcess.click();
             }
         });
     }
 
     // Start processing YouTube video
-    // Local File Upload Logic
-    if (btnUploadLocal && localVideoFile) {
-        btnUploadLocal.addEventListener('click', () => {
-            localVideoFile.click();
-        });
-
-        localVideoFile.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const formData = new FormData();
-            formData.append("file", file);
-
-            const originalBtnHtml = btnUploadLocal.innerHTML;
-            btnUploadLocal.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Subiendo y extrayendo audio...';
-            btnUploadLocal.disabled = true;
-
-            fetch('/api/upload', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                btnUploadLocal.innerHTML = originalBtnHtml;
-                btnUploadLocal.disabled = false;
-                
-                if (data.status === 'ok' && data.task_id) {
-                    youtubeUrlInput.value = 'cache:' + data.task_id;
-                    if (chkUseCache) chkUseCache.checked = false;
-                    btnProcess.click();
-                } else {
-                    alert("Error subiendo archivo: " + JSON.stringify(data));
-                }
-            })
-            .catch(error => {
-                console.error("Error al subir:", error);
-                alert("Error de red al subir el archivo.");
-                btnUploadLocal.innerHTML = originalBtnHtml;
-                btnUploadLocal.disabled = false;
-            });
-        });
-    }
-
     btnProcess.addEventListener('click', () => {
         let url = '';
         if (chkUseCache.checked) {
@@ -727,41 +692,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Show Studio Button when task finishes
     function revealStudioButton() {
-        if (currentTaskId) {
+        if (typeof currentTaskId !== 'undefined' && currentTaskId && btnOpenStudio) {
             btnOpenStudio.classList.remove('hidden');
         }
     }
 
     function openStudioView() {
         if (!currentTaskId) {
-            alert('Por favor, procesa o selecciona un caché primero.');
+            alert('ID de video no encontrado en la URL.');
             return;
         }
-        homeView.classList.add('hidden');
-        studioView.classList.remove('hidden');
-        studioVideoWrapper.appendChild(videoPlayer);
-        videoPlayer.classList.remove('hidden');
+        
+        if (typeof videoPlayer === 'undefined' || !videoPlayer) {
+            videoPlayer = document.createElement('video');
+            videoPlayer.id = 'video-player';
+            videoPlayer.controls = true;
+            videoPlayer.className = 'styled-video';
+            videoPlayer.src = `/cache/${currentTaskId}/video_original.mp4`;
+        }
+        if (typeof studioVideoWrapper !== 'undefined' && studioVideoWrapper) {
+            studioVideoWrapper.appendChild(videoPlayer);
+        }
+        if (videoPlayer) videoPlayer.classList.remove('hidden');
+        if (homeView) homeView.classList.add('hidden');
+        if (studioView) studioView.classList.remove('hidden');
         if (navHome) navHome.classList.remove('active');
         if (navStudio) navStudio.classList.add('active');
+        
         loadStudioData();
     }
 
     function openHomeView() {
-        playerWrapper.appendChild(videoPlayer);
-        studioView.classList.add('hidden');
-        homeView.classList.remove('hidden');
-        if (navHome) navHome.classList.add('active');
-        if (navStudio) navStudio.classList.remove('active');
+        window.close();
     }
 
-    btnOpenStudio.addEventListener('click', openStudioView);
-    btnCloseStudio.addEventListener('click', openHomeView);
+    if (btnOpenStudio) btnOpenStudio.addEventListener('click', openStudioView);
+    if (btnCloseStudio) btnCloseStudio.addEventListener('click', openHomeView);
     
     if (navHome) navHome.addEventListener('click', (e) => { e.preventDefault(); openHomeView(); });
     if (navStudio) navStudio.addEventListener('click', (e) => { e.preventDefault(); openStudioView(); });
 
     function loadStudioData() {
-        const batchSize = parseInt(inputBatchSize.value) || 5;
+        const batchSize = (typeof inputBatchSize !== 'undefined') ? parseInt(inputBatchSize.value) || 5 : 5;
         fetch(`/api/studio/${currentTaskId}/data?batch_size=${batchSize}`)
             .then(res => res.json())
             .then(data => {
@@ -776,13 +748,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderTimeline() {
+        if (!trackEnglish || !trackDubbed || !timelineRuler) return;
         trackEnglish.innerHTML = '';
         trackDubbed.innerHTML = '';
         timelineRuler.innerHTML = '';
         
         if (!studioData || studioData.length === 0) return;
         
-        let totalDuration = videoPlayer.duration || studioData[studioData.length - 1].end_time;
+        let totalDuration = (typeof videoPlayer !== 'undefined' && videoPlayer.duration) ? videoPlayer.duration : studioData[studioData.length - 1].end_time;
         if (isNaN(totalDuration) || totalDuration <= 0) totalDuration = 100; // fallback
         
         const totalWidth = totalDuration * PIXELS_PER_SECOND;
@@ -791,8 +764,10 @@ document.addEventListener('DOMContentLoaded', () => {
         trackEnglish.style.width = `${totalWidth}px`;
         trackDubbed.style.width = `${totalWidth}px`;
         timelineRuler.style.width = `${totalWidth}px`;
-        videoBlock.style.width = `${totalWidth}px`;
-        videoBlock.innerHTML = `<span style="position:relative; z-index:1; font-weight:bold;">Video Original (${formatTime(totalDuration)})</span>`;
+        if (videoBlock) {
+            videoBlock.style.width = `${totalWidth}px`;
+            videoBlock.innerHTML = `<span style="position:relative; z-index:1; font-weight:bold;">Video Original (${formatTime(totalDuration)})</span>`;
+        }
         
         // Build Ruler Marks
         for (let s = 0; s <= totalDuration; s += 10) {
@@ -834,7 +809,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 dubBlock.classList.add('selected');
                 
                 selectStudioBlock(batch);
-                videoPlayer.currentTime = batch.start_time;
+                if (videoPlayer) videoPlayer.currentTime = batch.start_time;
             });
             
             trackDubbed.appendChild(dubBlock);
@@ -843,40 +818,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function selectStudioBlock(batch) {
         studioActiveBlock = batch;
-        inspectorBlockName.innerHTML = `<i class="fa-solid fa-cube text-teal"></i> Bloque #${batch.batch_index} [${formatTime(batch.start_time)} - ${formatTime(batch.end_time)}]`;
-        studioTextarea.value = batch.text;
-        inspectorContent.classList.remove('hidden');
+        if (inspectorBlockName) inspectorBlockName.innerHTML = `<i class="fa-solid fa-cube text-teal"></i> Bloque #${batch.batch_index} [${formatTime(batch.start_time)} - ${formatTime(batch.end_time)}]`;
+        if (studioTextarea) studioTextarea.value = batch.text;
+        if (inspectorContent) inspectorContent.classList.remove('hidden');
     }
 
-    btnStudioPlayOrig.addEventListener('click', () => {
-        if (!studioActiveBlock) return;
+    if (btnStudioPlayOrig) btnStudioPlayOrig.addEventListener('click', () => {
+        if (!studioActiveBlock || !studioAudioPlayer) return;
         studioAudioPlayer.src = `/api/studio/${currentTaskId}/audio/original?start=${studioActiveBlock.start_time}&end=${studioActiveBlock.end_time}`;
         studioAudioPlayer.play();
     });
 
-    btnStudioPlayDub.addEventListener('click', () => {
-        if (!studioActiveBlock) return;
-        // Anti-cache string
+    if (btnStudioPlayDub) btnStudioPlayDub.addEventListener('click', () => {
+        if (!studioActiveBlock || !studioAudioPlayer) return;
         studioAudioPlayer.src = `/api/studio/${currentTaskId}/audio/dubbed/${studioActiveBlock.batch_index}?t=${new Date().getTime()}`;
         studioAudioPlayer.play();
     });
 
-    btnStudioRegenerate.addEventListener('click', () => {
+    if (btnStudioRegenerate) btnStudioRegenerate.addEventListener('click', () => {
         if (!studioActiveBlock) return;
         
-        btnStudioRegenerate.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Regenerando (Toma ~5s)...';
+        btnStudioRegenerate.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Regenerando...';
         btnStudioRegenerate.disabled = true;
         
         const payload = {
             batch_index: studioActiveBlock.batch_index,
             text: studioTextarea.value,
-            speaker: selectSpeaker.value,
-            vibevoice_model: selectVibevoiceModel.value,
-            vibevoice_cfg: parseFloat(inputVibevoiceCfg.value),
-            vibevoice_steps: parseInt(inputVibevoiceSteps.value)
+            speaker: (typeof selectSpeaker !== 'undefined') ? selectSpeaker.value : 'default',
+            vibevoice_model: (typeof selectVibevoiceModel !== 'undefined') ? selectVibevoiceModel.value : '',
+            vibevoice_cfg: (typeof inputVibevoiceCfg !== 'undefined') ? parseFloat(inputVibevoiceCfg.value) : 1.0,
+            vibevoice_steps: (typeof inputVibevoiceSteps !== 'undefined') ? parseInt(inputVibevoiceSteps.value) : 25
         };
         
-        fetch(`/api/studio/${currentTaskId}/reprocess?batch_size=${parseInt(inputBatchSize.value)||5}`, {
+        fetch(`/api/studio/${currentTaskId}/reprocess?batch_size=${(typeof inputBatchSize !== 'undefined') ? parseInt(inputBatchSize.value)||5 : 5}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -884,15 +858,14 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(res => res.json())
         .then(data => {
             btnStudioRegenerate.innerHTML = '<i class="fa-solid fa-check"></i> ¡Éxito! Reproduce el Español.';
-            studioActiveBlock.text = studioTextarea.value; // Update local state for UI
+            studioActiveBlock.text = studioTextarea.value;
             
             setTimeout(() => {
                 btnStudioRegenerate.innerHTML = '<i class="fa-solid fa-rotate"></i> Regenerate Audio (5s)';
                 btnStudioRegenerate.disabled = false;
             }, 3000);
             
-            // Auto play the newly generated dub
-            btnStudioPlayDub.click();
+            if (btnStudioPlayDub) btnStudioPlayDub.click();
         })
         .catch(err => {
             alert('Error regenerando audio: ' + err.message);
@@ -901,17 +874,24 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    btnStudioFinalize.addEventListener('click', () => {
+    if (btnStudioFinalize) btnStudioFinalize.addEventListener('click', () => {
         if (!currentTaskId) return;
         if (confirm("Se preparará el ensamblaje final. Deberás presionar 'Volver' y luego darle a Simular con Caché Local para que arme el video. ¿Continuar?")) {
             fetch(`/api/studio/${currentTaskId}/finalize`, { method: 'POST' })
             .then(res => res.json())
             .then(data => {
                 alert(data.message);
-                btnCloseStudio.click(); // Autoclose the studio to reveal the play button
+                if (btnCloseStudio) btnCloseStudio.click();
             })
             .catch(err => alert('Error finalizing: ' + err));
         }
     });
 
+    // Auto-start for standalone studio app
+    const urlParams = new URLSearchParams(window.location.search);
+    const taskId = urlParams.get('task_id');
+    if (taskId) {
+        currentTaskId = taskId;
+        setTimeout(openStudioView, 100);
+    }
 });

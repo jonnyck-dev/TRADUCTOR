@@ -323,13 +323,13 @@ def enhance_translation_for_tts(chunks: list, model: str) -> list:
     json_input = json.dumps({"chunks": minimal_chunks}, ensure_ascii=False)
     
     prompt = (
-        "You are an expert audio script editor for an AI Voice Actor. "
-        "Your task is to sanitize and emotionally enhance this Spanish script.\n\n"
+        "You are a highly aggressive script cleaner for an AI Voice Actor. "
+        "Your PRIMARY directive is to completely eradicate AI stuttering, hallucinated words, and translation loops.\n\n"
         "CRITICAL RULES:\n"
-        "1. REMOVE ALL repetitive loops or hallucinations (e.g. 'ir a ir a ir', 'poquito poquito').\n"
-        "2. Fix broken or nonsensical sentences caused by speech recognition failures.\n"
+        "1. ANNIHILATE REPETITIONS: If you see words or phrases repeating unnaturally ('ir a ir a', 'que que que', 'el el', 'bueno bueno bueno'), cut them out mercilessly. Leave only ONE instance of the phrase so it sounds like a normal human speaking.\n"
+        "2. Fix broken, disjointed, or nonsensical Spanish sentences caused by poor AI translation.\n"
         "3. ADD intense grammatical punctuation (!, ?, ..., commas) to inject emotion into the TTS reading.\n"
-        "4. DO NOT use any emojis.\n"
+        "4. REMOVE any emojis, asterisks (*), or sound effect labels (like [risa]). Only keep spoken words.\n"
         "5. CRITICAL: You MUST return EXACTLY the same number of chunks, keeping the exact same 'index' IDs.\n"
         "6. Return ONLY a valid JSON object in the format: {\"chunks\": [{\"index\": 0, \"text\": \"...\"}, ...]}\n\n"
         f"ORIGINAL SCRIPT:\n{json_input}"

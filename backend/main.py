@@ -3,7 +3,7 @@ import uuid
 import json
 import traceback
 import subprocess
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi import FastAPI, BackgroundTasks, HTTPException, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -30,11 +30,13 @@ app.add_middleware(
 )
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CACHE_DIR = os.path.join(BASE_DIR, "cache")
 FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
+FRONTEND_STUDIO_DIR = os.path.join(BASE_DIR, "frontend_studio")
+CACHE_DIR = os.path.join(BASE_DIR, "cache")
 
 os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(FRONTEND_DIR, exist_ok=True)
+os.makedirs(FRONTEND_STUDIO_DIR, exist_ok=True)
 
 # In-memory task store
 tasks = {}
@@ -631,6 +633,31 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, v
             tasks[task_id]["error"] = str(e)
 
 
+@app.post("/api/upload")
+async def upload_local_video(file: UploadFile = File(...)):
+    import shutil
+    import subprocess
+    
+    task_id = str(uuid.uuid4())
+    source_dir = os.path.join(CACHE_DIR, task_id)
+    downloads_dir = os.path.join(source_dir, "downloads")
+    os.makedirs(downloads_dir, exist_ok=True)
+    
+    video_path = os.path.join(downloads_dir, "video.mp4")
+    
+    try:
+        with open(video_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        audio_path = os.path.join(downloads_dir, "audio.wav")
+        cmd = f'ffmpeg -y -i "{video_path}" -vn -acodec pcm_s16le -ar 24000 -ac 1 "{audio_path}"'
+        subprocess.run(cmd, shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        return {"status": "ok", "task_id": task_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/process")
 def process_video(request: ProcessRequest, background_tasks: BackgroundTasks):
     if request.url.startswith("cache:"):
@@ -952,6 +979,9 @@ def finalize_studio_video(task_id: str):
 
 # Mount video cache directory
 app.mount("/cache", StaticFiles(directory=CACHE_DIR), name="cache")
+
+# Mount studio frontend
+app.mount("/studio", StaticFiles(directory=FRONTEND_STUDIO_DIR, html=True), name="frontend_studio")
 
 # Mount frontend directory last (so / serves index.html)
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
