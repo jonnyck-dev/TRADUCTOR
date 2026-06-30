@@ -73,10 +73,13 @@ def merge_short_chunks(chunks: list) -> list:
         duration = end - start
         word_count = len(current_chunk.get("text", "").strip().split())
         
-        # Merge if it's a single word (monosyllable) OR if the duration is extremely short (< 0.4s)
-        if duration < 0.4 or word_count <= 1:
-            print(f"Merging short chunk: '{current_chunk.get('text', '').strip()}' ({duration:.2f}s) into next chunk.")
-            next_ts = chunk.get("timestamp", [0.0, 0.0])
+        next_ts = chunk.get("timestamp", [0.0, 0.0])
+        gap = next_ts[0] - end
+        
+        # Merge if it's a single word (monosyllable), extremely short (< 0.4s), OR gap is tiny (< 0.15s)
+        # Added a max duration safety of 15.0s to prevent creating infinite chunks if a person speaks extremely fast continuously.
+        if duration < 0.4 or word_count <= 1 or (gap < 0.15 and duration < 15.0):
+            print(f"Merging chunk: '{current_chunk.get('text', '').strip()}' (Dur: {duration:.2f}s, Gap: {gap:.2f}s) into next chunk.")
             
             # Combine text
             current_text = current_chunk.get("text", "").strip()
@@ -586,7 +589,7 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, v
         
         # If in Sentence Mode, slice into decoupled sync_size blocks using Single-Pass WhisperX (unless sizes match)
         if tts_mode == "sentence":
-            if batch_size != sync_size:
+            if batch_size != sync_size and len(translated_chunks) > sync_size:
                 print(f"[TTS] Slicing super-audio into blocks of {sync_size} phrases via Single-Pass WhisperX...")
                 from audio_processor import process_super_audio_with_whisperx
                 
@@ -597,7 +600,10 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, v
                 tts_chunks_for_sync = final_sync_chunks
                 mp3_paths_for_sync = sliced_mp3s
             else:
-                print(f"[TTS] Batch Size ({batch_size}) equals Sync Size ({sync_size}). Bypassing WhisperX slicing!")
+                if len(translated_chunks) <= sync_size:
+                    print(f"[TTS] Bypass Inteligente: El video/slice tiene solo {len(translated_chunks)} frases (<= Sync Size {sync_size}). Omitiendo Single-Pass WhisperX para máxima velocidad.")
+                else:
+                    print(f"[TTS] Batch Size ({batch_size}) equals Sync Size ({sync_size}). Bypassing WhisperX slicing!")
                 tts_chunks_for_sync = tts_chunks
                 mp3_paths_for_sync = mp3_paths
         else:
