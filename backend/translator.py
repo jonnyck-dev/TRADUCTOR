@@ -405,6 +405,12 @@ def synchronize_translation_for_tts(chunks: list, model: str) -> list:
         # Max words is the max between duration * 2.5 and original_words * 1.25
         max_words = int(max(math.ceil(duration * 2.5), math.ceil(orig_words * 1.25)))
         
+        # PHYSICAL LIMIT CAP: A TTS engine cannot realistically speak more than 3.5 words per second without artifacting.
+        # If the original speaker spoke insanely fast, we must still enforce a hard cap for the Spanish TTS.
+        absolute_max = int(math.ceil(duration * 3.5))
+        if max_words > absolute_max:
+            max_words = absolute_max
+        
         current_text = chunk.get("text", "")
         current_words = len(current_text.split())
         
@@ -462,6 +468,21 @@ def synchronize_translation_for_tts(chunks: list, model: str) -> list:
             content = content[start_idx:end_idx+1]
             
         synced_data = json.loads(content)
+        
+        # Robust extractor in case LLM wrapped the array in a dictionary (e.g. {"chunks": [...]})
+        if isinstance(synced_data, dict):
+            if "chunks" in synced_data:
+                synced_data = synced_data["chunks"]
+            elif "data" in synced_data:
+                synced_data = synced_data["data"]
+            else:
+                for val in synced_data.values():
+                    if isinstance(val, list):
+                        synced_data = val
+                        break
+                        
+        if not isinstance(synced_data, list):
+            raise ValueError("El LLM no devolvió una lista JSON válida para la sincronización.")
         
         # Merge back
         for synced_item in synced_data:
