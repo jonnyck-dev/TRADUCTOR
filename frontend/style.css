@@ -20,6 +20,8 @@
     --font-header: 'Plus Jakarta Sans', sans-serif;
     --font-body: 'Outfit', sans-serif;
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    color-scheme: dark;
 }
 
 * {
@@ -557,14 +559,6 @@ video {
 .select-wrapper select:focus {
     border-color: var(--accent-purple);
     box-shadow: 0 0 10px rgba(157, 78, 221, 0.15);
-}
-
-.select-wrapper select option,
-.select-wrapper select optgroup,
-.studio-select option,
-.studio-select optgroup {
-    background-color: var(--bg-dark);
-    color: var(--color-text-main);
 }
 
 .dropdown-icon {
