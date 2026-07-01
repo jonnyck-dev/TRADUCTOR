@@ -95,3 +95,21 @@ Este proyecto es una aplicación web local que automatiza el proceso de traducci
 - **Solución**:
   - **Migrar a `uv` (Astral)**: Reemplazar todas las creaciones de entorno virtual y comandos de instalación en los archivos `.bat` para usar el gestor ultrarrápido en Rust (`uv venv` y `uv pip install`).
   - Esto nos permitirá usar el caché global mediante hardlinks, reduciendo la instalación de librerías masivas como PyTorch a simples segundos, resolviendo cualquier conflicto de dependencias al instante y mejorando drásticamente los tiempos de actualización del proyecto.
+
+---
+
+## Optimizaciones pendientes
+
+### 1. Servidor TTS persistente
+- **Contexto**: Actualmente el servidor TTS (VibeVoice/VoxCPM) se inicia y destruye por cada tarea para liberar VRAM.
+- **Cuándo implementar**: Cuando el proyecto se despliegue en un servidor dedicado o se entregue al usuario final.
+- **Objetivo**: Mantener el servidor TTS vivo entre tareas para evitar la recarga del modelo (~30s) en cada procesamiento.
+
+### 2. Entorno mínimo por motor
+- **Contexto**: Cada entorno Python (VibeVoice, Demucs, etc.) tiene paquetes no usados que ocupan espacio (~2 GB innecesarios).
+- **Objetivo**: Crear `requirements_tts_minimal.txt` eliminando gradio, whisperx, pyannote, datasets, optuna, pytorch_lightning, etc. Reducir tiempo de importación y espacio en disco.
+
+### 3. Fusión de shards del modelo
+- **Contexto**: El checkpoint de VibeVoice-1.5B tiene 3 archivos `.safetensors` (~1.8 GB c/u) que se cargan secuencialmente.
+- **Objetivo**: Fusionarlos en un solo `model.safetensors` para reducir overhead de carga (~1-2s más rápido).
+- **Nota**: Requiere respaldar los shards originales antes de ejecutar. Se modifica el proyecto VibeVoice, no el Traductor.

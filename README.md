@@ -139,3 +139,29 @@ Servidor en **http://localhost:8000**
 - **WSL**: El backend detecta `os.name` y usa `wsl_to_windows_path()` o rutas nativas según corresponda.
 - **Caché idempotente**: Cada etapa guarda resultados en `cache/{task_id}/`; si se interrumpe, retoma desde el último paso completo.
 - **FFmpeg**: Ruta hardcodeada `C:\Users\jpzam\Downloads\audioconverter\bin\ffmpeg.exe` en Windows; `ffmpeg` en PATH en WSL/Linux.
+
+---
+
+## Documentación del proyecto
+
+Este repositorio contiene varios archivos `.md` con propósitos específicos. Esta sección es para que una IA (u otro desarrollador) entienda rápidamente qué contiene cada uno y cuándo consultarlos.
+
+| Archivo | Propósito |
+|---------|-----------|
+| `README.md` | Documentación principal para el usuario: descripción, instalación, uso, API, features. Punto de entrada del proyecto. |
+| `implementation_plan.md` | Plan de implementación técnica: estado actual del desarrollo, migraciones pendientes (VoxCPM, uv), correcciones planificadas. Orientado a desarrolladores e IA. |
+| `deployment_plan.md` | Plan de despliegue a producción: Docker, portabilidad cloud, variables de entorno, submodules. Para cuando el proyecto se mueva a un servidor. |
+| `debugagent.md` | Contexto de debugging para agentes IA: historial de errores resueltos, arquitectura clave, sistema de caché. Consultar cuando se reporte un error en ejecución. |
+| `benchmark_report.md` | Reporte de rendimiento comparativo entre VibeVoice y VoxCPM en diferentes escenarios (con/sin clonación, one-shot/frase, paralelo/secuencial). |
+
+### Flujo de consulta recomendado para una IA
+
+1. Leer `README.md` para entender el proyecto, el pipeline y cómo se instala.
+2. Leer `implementation_plan.md` para conocer el estado del desarrollo y qué falta implementar.
+3. Si hay un error en tiempo de ejecución, leer `debugagent.md` para contexto de debugging.
+4. Si se planea desplegar, leer `deployment_plan.md`.
+5. Si se necesita comparar motores TTS, leer `benchmark_report.md`.
+
+Los planes de implementación pendientes se encuentran en `implementation_plan.md`, no en este archivo.
+
+

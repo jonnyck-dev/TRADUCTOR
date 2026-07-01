@@ -493,6 +493,114 @@ def synchronize_translation_for_tts(chunks: list, model: str) -> list:
                 print(f"  [Resumido] Bloque {idx} ajustado exitosamente al límite de tiempo.")
                 
         return chunks
+
+def phonetic_normalization_for_tts(chunks: list, model: str = "llama3", save_dir: str = None) -> list:
+    """
+    Escanea las frases buscando números o acrónimos. 
+    Si los encuentra, delega a una IA Especializada la tarea de escribir su pronunciación fonética.
+    Luego aplica un filtro Python incondicional para reemplazar 'y' por 'e'.
+    """
+    print("\n[Sanador IA] Paso Extra: Normalización Fonética (Anti-Acento Inglés)...")
+    
+    import re
+    chunks_to_phoneticize = []
+    
+    for idx, chunk in enumerate(chunks):
+        text = chunk.get("text", "")
+        # Regex to find numbers (\d) or Acronyms (2 or more uppercase letters)
+        if re.search(r'\d', text) or re.search(r'\b[A-Z]{2,}\b', text):
+            chunks_to_phoneticize.append({
+                "index": idx,
+                "text": text
+            })
+            
+    if chunks_to_phoneticize:
+        print(f"[Sanador IA] Se detectaron {len(chunks_to_phoneticize)} frases con números o acrónimos. Llamando a IA Fonética...")
+        json_input = json.dumps(chunks_to_phoneticize, ensure_ascii=False)
+        
+        prompt = (
+            "You are an expert phonetic transcriber for a Spanish Text-to-Speech (TTS) system that has an American English accent bias. "
+            "Your ONLY job is to normalize numbers and acronyms in the provided Spanish text so the TTS pronounces them correctly in Spanish.\n\n"
+            "RULES:\n"
+            "1. NUMBERS: Convert all numbers into spelled-out Spanish words based on context (e.g., '116' -> 'ciento dieciséis', '1990s' -> 'los años noventa').\n"
+            "2. ACRONYMS: Convert all uppercase acronyms that are pronounced letter-by-letter into phonetic syllables. Use 'e' instead of 'i' for the 'ee' sound because the TTS reads it like an American. (e.g., 'DLSS' -> 'de ele ese ese', 'FBI' -> 'efe be e', 'PC' -> 'pe se').\n"
+            "3. EXCEPTIONS: If an uppercase word is a known brand or name pronounced as a single word (like 'NVIDIA', 'NASA', 'SONY'), DO NOT spell it out.\n"
+            "4. DO NOT change the rest of the text, do not summarize, do not translate to English.\n"
+            "5. Return EXACTLY the same number of JSON objects with their original 'index'.\n\n"
+            "EXAMPLES:\n"
+            "Input: [{\"index\": 0, \"text\": \"El FBI encontró 2 armas en la PC.\"}]\n"
+            "Output: [{\"index\": 0, \"text\": \"El efe be e encontró dos armas en la pe se.\"}]\n\n"
+            "Input: [{\"index\": 1, \"text\": \"En 1994, NVIDIA lanzó el DLSS versión 2.5.\"}]\n"
+            "Output: [{\"index\": 1, \"text\": \"En mil novecientos noventa y cuatro, NVIDIA lanzó el de ele ese ese versión dos punto cinco.\"}]\n\n"
+            "Now process the following array:\n"
+            f"{json_input}"
+        )
+        
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+            "format": "json",
+            "options": {"num_predict": 32768, "temperature": 0.1}
+        }
+        
+        try:
+            url = "http://127.0.0.1:11434/api/chat"
+            res = call_ollama_api(url, payload, timeout=300)
+            content = res.get("message", {}).get("content", "").strip()
+            
+            if "<think>" in content:
+                content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+                
+            start_idx = content.find('[')
+            end_idx = content.rfind(']')
+            if start_idx != -1 and end_idx != -1:
+                content = content[start_idx:end_idx+1]
+                
+            phonetic_data = json.loads(content)
+            
+            if isinstance(phonetic_data, dict):
+                for key in ["chunks", "data"]:
+                    if key in phonetic_data and isinstance(phonetic_data[key], list):
+                        phonetic_data = phonetic_data[key]
+                        break
+                else:
+                    for val in phonetic_data.values():
+                        if isinstance(val, list):
+                            phonetic_data = val
+                            break
+                            
+            if isinstance(phonetic_data, list):
+                for p_item in phonetic_data:
+                    idx = p_item.get("index")
+                    new_text = p_item.get("text")
+                    if idx is not None and new_text and 0 <= idx < len(chunks):
+                        chunks[idx]["text"] = new_text
+                        print(f"  [Fonética] Bloque {idx} normalizado: {new_text}")
+            else:
+                print("[Sanador IA] Error: La IA Fonética no devolvió una lista JSON válida.")
+        except Exception as e:
+            print(f"[Sanador IA] Falló la normalización fonética: {e}. Se usará texto original.")
+    else:
+        print("[Sanador IA] No se encontraron números ni acrónimos. Omitiendo pase de IA Fonética.")
+        
+    # Python Guillotine: Reemplazar 'y' aislada por 'e' en todas las frases incondicionalmente
+    for chunk in chunks:
+        old_text = chunk.get("text", "")
+        # Usar regex para encontrar " y " o " Y " como palabras aisladas
+        new_text = re.sub(r'\b[yY]\b', 'e', old_text)
+        if new_text != old_text:
+            chunk["text"] = new_text
+            
+    if save_dir:
+        out_path = os.path.join(save_dir, "spanish_phonetic.json")
+        try:
+            with open(out_path, "w", encoding="utf-8") as f:
+                json.dump({"chunks": chunks}, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"[Warning] No se pudo guardar spanish_phonetic.json: {e}")
+            
+    return chunks
     except Exception as e:
         print(f"[Sanador IA] Falló la sincronización: {e}. Usando texto largo original.")
         return chunks

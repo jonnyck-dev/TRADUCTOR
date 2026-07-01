@@ -465,6 +465,7 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, v
                     raw_data = json.load(f)
                 raw_translated_chunks = raw_data.get("chunks", [])
             else:
+                from translator import translate_chunks
                 raw_translated_chunks = translate_chunks(preprocessed_chunks, model=model, save_dir=whisper_dir)
                 raw_data = {
                     "text": " ".join([c.get("text", "") for c in raw_translated_chunks]),
@@ -474,11 +475,15 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, v
                     json.dump(raw_data, f, ensure_ascii=False, indent=2)
             
             # 3b. Sanitize and enhance translation for TTS (Anti-Collapse)
-            from translator import enhance_translation_for_tts, synchronize_translation_for_tts
-            translated_chunks = enhance_translation_for_tts(raw_translated_chunks, model=model)
+            from translator import enhance_translation_for_tts, phonetic_normalization_for_tts, synchronize_translation_for_tts
             
-            # 3c. Math Sync: Ensure words fit in their allotted timestamp
-            translated_chunks = synchronize_translation_for_tts(translated_chunks, model=model)
+            enhanced_chunks = enhance_translation_for_tts(raw_translated_chunks, model=model)
+            
+            # 3c. Phonetic Normalization (Anti-Gringo Accent)
+            phonetic_chunks = phonetic_normalization_for_tts(enhanced_chunks, model=model)
+            
+            # 3d. Math Sync: Ensure words fit in their allotted timestamp
+            translated_chunks = synchronize_translation_for_tts(phonetic_chunks, model=model)
             
             translated_data = {
                 "text": " ".join([c.get("text", "") for c in translated_chunks]),
