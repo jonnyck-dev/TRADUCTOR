@@ -724,8 +724,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let isOriginalMuted = false;
     let isPhraseMuted = false;
     
-    let isV2Visible = false; // Dubbed
-    let isV1Visible = true;  // Original
+    let isV2Visible = true; // Dubbed
+    let isV1Visible = false;  // Original
     
     const homeView = document.getElementById('home-view');
     const studioView = document.getElementById('studio-view');
@@ -787,8 +787,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (btnVisDubbed) btnVisDubbed.closest('.track-label').classList.remove('hidden');
             
             // Apply priority logic (V2 over V1)
-            isV2Visible = false;
-            isV1Visible = true;
+            isV2Visible = true;
+            isV1Visible = false;
             updateVideoSource();
             
             loadStudioData();
@@ -861,8 +861,8 @@ document.addEventListener('DOMContentLoaded', () => {
             videoPlayer.classList.remove('hidden');
             if (studioVideoControls) studioVideoControls.classList.remove('hidden');
             
-            isV2Visible = false;
-            isV1Visible = true;
+            isV2Visible = true;
+            isV1Visible = false;
             updateVideoSource();
             
             loadStudioData();
@@ -872,19 +872,19 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateVideoSource() {
         if (!currentTaskId) return;
         const wasPlaying = !videoPlayer.paused;
-        const currentTime = videoPlayer.currentTime;
+        const currentTime = videoPlayer.currentTime || 0;
         
         if (isV2Visible) {
-            if (!videoPlayer.src.includes(`/api/stream/${currentTaskId}`)) {
-                videoPlayer.src = `/api/stream/${currentTaskId}?t=${new Date().getTime()}`;
-            }
+            // Force re-assignment to ensure it loads even if it was moved in the DOM
+            videoPlayer.src = `/api/stream/${currentTaskId}?t=${new Date().getTime()}`;
             videoPlayer.muted = isDubbedMuted;
         } else if (isV1Visible) {
-            if (!videoPlayer.src.includes(`/api/stream_original/${currentTaskId}`)) {
-                videoPlayer.src = `/api/stream_original/${currentTaskId}`;
-            }
+            videoPlayer.src = `/api/stream_original/${currentTaskId}?t=${new Date().getTime()}`;
             videoPlayer.muted = isOriginalMuted;
         }
+        
+        // Force the video element to load to prevent blank screen
+        videoPlayer.load();
         
         if (btnVisDubbed) {
             btnVisDubbed.innerHTML = isV2Visible ? '<i class="fa-solid fa-eye"></i>' : '<i class="fa-solid fa-eye-slash text-gray"></i>';
