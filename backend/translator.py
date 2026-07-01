@@ -439,7 +439,8 @@ def synchronize_translation_for_tts(chunks: list, model: str) -> list:
         "1. DO NOT translate to English. Output in Spanish.\n"
         "2. Keep the emotional tone and punctuation (!, ?, commas).\n"
         "3. You MUST return EXACTLY the same number of items, keeping the exact same 'index' IDs.\n"
-        "4. Return ONLY a valid JSON array in the format: [{\"index\": 0, \"text\": \"...\"}, ...]\n\n"
+        "4. Return ONLY a valid JSON array in the format: [{\"index\": 0, \"text\": \"...\"}, ...]\n"
+        "5. CRITICAL: NEVER use digits (0-9). If the input contains spelled-out numbers (e.g., 'ciento diez') or spelled-out phonetic acronyms (e.g., 'efe be e'), you MUST keep them written as words.\n\n"
         f"OVERSIZED PHRASES:\n{json_input}"
     )
     
