@@ -450,12 +450,19 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, v
         t0 = time.time()
         tasks[task_id]["status"] = "translating"
         tasks[task_id]["progress"] = 55
-        translated_json_path = os.path.join(whisper_dir, "spanish_translated.json")
-        enhanced_json_path = os.path.join(whisper_dir, "spanish_enhanced.json")
+        translated_json_path = os.path.join(whisper_dir, "spanish_1_translated.json")
+        enhanced_json_path = os.path.join(whisper_dir, "spanish_2_enhanced.json")
+        phonetic_json_path = os.path.join(whisper_dir, "spanish_3_phonetic.json")
+        final_json_path = os.path.join(whisper_dir, "spanish_4_final.json")
         
-        if os.path.exists(enhanced_json_path):
-            print(f"Skipping translation & enhancement, using cached: {enhanced_json_path}")
-            with open(enhanced_json_path, 'r', encoding='utf-8') as f:
+        # Retro-compatibility checks (if old cached files exist)
+        cache_to_load = None
+        if os.path.exists(final_json_path): cache_to_load = final_json_path
+        elif os.path.exists(os.path.join(whisper_dir, "spanish_enhanced.json")): cache_to_load = os.path.join(whisper_dir, "spanish_enhanced.json")
+        
+        if cache_to_load:
+            print(f"Skipping translation pipeline, using fully cached final version: {cache_to_load}")
+            with open(cache_to_load, 'r', encoding='utf-8') as f:
                 translated_data = json.load(f)
             translated_chunks = translated_data.get("chunks", [])
         else:
@@ -478,9 +485,13 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, v
             from translator import enhance_translation_for_tts, phonetic_normalization_for_tts, synchronize_translation_for_tts
             
             enhanced_chunks = enhance_translation_for_tts(raw_translated_chunks, model=model)
+            with open(enhanced_json_path, "w", encoding="utf-8") as f:
+                json.dump({"chunks": enhanced_chunks}, f, ensure_ascii=False, indent=2)
             
             # 3c. Phonetic Normalization (Anti-Gringo Accent)
             phonetic_chunks = phonetic_normalization_for_tts(enhanced_chunks, model=model)
+            with open(phonetic_json_path, "w", encoding="utf-8") as f:
+                json.dump({"chunks": phonetic_chunks}, f, ensure_ascii=False, indent=2)
             
             # 3d. Math Sync: Ensure words fit in their allotted timestamp
             translated_chunks = synchronize_translation_for_tts(phonetic_chunks, model=model)
@@ -489,7 +500,7 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, v
                 "text": " ".join([c.get("text", "") for c in translated_chunks]),
                 "chunks": translated_chunks
             }
-            with open(enhanced_json_path, "w", encoding="utf-8") as f:
+            with open(final_json_path, "w", encoding="utf-8") as f:
                 json.dump(translated_data, f, ensure_ascii=False, indent=2)
                 
         step_times["3_translation_and_enhancement"] = time.time() - t0
