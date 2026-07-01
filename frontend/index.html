@@ -375,9 +375,19 @@
 
             <div class="timeline-container">
                 <div class="timeline-track-labels">
-                    <div class="track-label video-track">V1 | Video</div>
-                    <div class="track-label dubbed-track" style="color: #00f2fe;">A1 | Doblaje (Esp)</div>
-                    <div class="track-label english-track" style="color: #9d4edd;">A2 | Original (Ing)</div>
+                    <div class="track-label video-track">V1 | Video Visual</div>
+                    <div class="track-label dubbed-track" style="color: #00f2fe; display: flex; justify-content: space-between; align-items: center;">
+                        <span>A1 | Doblaje Global</span>
+                        <button id="btn-mute-dubbed" class="timeline-mute-btn" title="Silenciar/Activar" style="background: none; border: none; color: inherit; cursor: pointer;"><i class="fa-solid fa-volume-high"></i></button>
+                    </div>
+                    <div class="track-label english-track" style="color: #9d4edd; display: flex; justify-content: space-between; align-items: center;">
+                        <span>A2 | Original Global</span>
+                        <button id="btn-mute-original" class="timeline-mute-btn" title="Silenciar/Activar" style="background: none; border: none; color: inherit; cursor: pointer;"><i class="fa-solid fa-volume-high"></i></button>
+                    </div>
+                    <div class="track-label" style="color: #1ed760; display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 11px;">
+                        <span>A3 | Frase Activa (Regenerada)</span>
+                        <button id="btn-mute-phrase" class="timeline-mute-btn" title="Silenciar/Activar" style="background: none; border: none; color: inherit; cursor: pointer;"><i class="fa-solid fa-volume-high"></i></button>
+                    </div>
                 </div>
                 <div class="timeline-scroll-area" id="timeline-scroll-area">
                     <div class="timeline-ruler" id="timeline-ruler"></div>

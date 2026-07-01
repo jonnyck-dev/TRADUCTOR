@@ -714,6 +714,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnCloseStudio = document.getElementById('btn-close-studio');
     const selectStudioCache = document.getElementById('select-studio-cache');
     const btnStudioLoadCache = document.getElementById('btn-studio-load-cache');
+    const btnMuteDubbed = document.getElementById('btn-mute-dubbed');
+    const btnMuteOriginal = document.getElementById('btn-mute-original');
+    const btnMutePhrase = document.getElementById('btn-mute-phrase');
+    let isDubbedMuted = false;
+    let isOriginalMuted = false;
+    let isPhraseMuted = false;
     const studioVideoControls = document.getElementById('studio-video-controls');
     const selectVideoSource = document.getElementById('select-video-source');
     const homeView = document.getElementById('home-view');
@@ -861,13 +867,50 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (val === 'original') {
                 videoPlayer.src = `/api/stream_original/${currentTaskId}`;
+                videoPlayer.muted = isOriginalMuted;
             } else {
                 videoPlayer.src = `/api/stream/${currentTaskId}?t=${new Date().getTime()}`;
+                videoPlayer.muted = isDubbedMuted;
             }
             
             videoPlayer.currentTime = currentTime;
             if (wasPlaying) {
                 videoPlayer.play();
+            }
+        });
+    }
+
+    function updateMuteUI(btn, isMuted) {
+        if (!btn) return;
+        btn.innerHTML = isMuted ? '<i class="fa-solid fa-volume-xmark" style="color: #ff4d4d;"></i>' : '<i class="fa-solid fa-volume-high"></i>';
+    }
+
+    if (btnMuteDubbed) {
+        btnMuteDubbed.addEventListener('click', () => {
+            isDubbedMuted = !isDubbedMuted;
+            updateMuteUI(btnMuteDubbed, isDubbedMuted);
+            if (selectVideoSource && selectVideoSource.value === 'dubbed') {
+                videoPlayer.muted = isDubbedMuted;
+            }
+        });
+    }
+
+    if (btnMuteOriginal) {
+        btnMuteOriginal.addEventListener('click', () => {
+            isOriginalMuted = !isOriginalMuted;
+            updateMuteUI(btnMuteOriginal, isOriginalMuted);
+            if (selectVideoSource && selectVideoSource.value === 'original') {
+                videoPlayer.muted = isOriginalMuted;
+            }
+        });
+    }
+
+    if (btnMutePhrase) {
+        btnMutePhrase.addEventListener('click', () => {
+            isPhraseMuted = !isPhraseMuted;
+            updateMuteUI(btnMutePhrase, isPhraseMuted);
+            if (studioAudioPlayer) {
+                studioAudioPlayer.muted = isPhraseMuted;
             }
         });
     }
@@ -966,7 +1009,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (typeof videoPlayer !== 'undefined' && videoPlayer) {
             videoPlayer.currentTime = studioActiveBlock.start_time;
-            videoPlayer.muted = true;
             videoPlayer.play();
             studioAudioPlayer.onended = () => videoPlayer.pause();
         }
@@ -980,7 +1022,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (typeof videoPlayer !== 'undefined' && videoPlayer) {
             videoPlayer.currentTime = studioActiveBlock.start_time;
-            videoPlayer.muted = true;
             videoPlayer.play();
             studioAudioPlayer.onended = () => videoPlayer.pause();
         }
