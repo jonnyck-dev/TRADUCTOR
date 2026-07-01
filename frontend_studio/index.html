@@ -44,6 +44,23 @@
                             <button id="btn-studio-play-orig" class="glow-button" style="flex:1; background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1);"><i class="fa-solid fa-ear-listen"></i> Inglés</button>
                             <button id="btn-studio-play-dub" class="glow-button" style="flex:1; background: rgba(0, 242, 254, 0.1); border-color: rgba(0, 242, 254, 0.3); color: #00f2fe;"><i class="fa-solid fa-play"></i> Español</button>
                         </div>
+
+                        <label style="margin-top: 15px; display: block;">MODELO TTS</label>
+                        <select id="select-studio-tts-model" class="studio-select" style="width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px; border-radius: 4px;">
+                            <option value="openbmb/VoxCPM2">VoxCPM2 (Español Perfecto)</option>
+                            <option value="VibeVoice-1.5B">VibeVoice 1.5B (Original)</option>
+                            <option value="VibeVoice-2B">VibeVoice 2B (Alta Calidad)</option>
+                        </select>
+                        
+                        <label style="margin-top: 15px; display: block;">VOZ (SPEAKER)</label>
+                        <select id="select-studio-speaker" class="studio-select" style="width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px; border-radius: 4px; margin-bottom: 10px;">
+                            <option value="cloned_speaker">Voz Clonada (Extraída de esta frase)</option>
+                            <option value="en-Frank_man">VoxCPM2 - Frank (Hombre, Madura)</option>
+                            <option value="en-Carter_man">VoxCPM2 - Carter (Hombre, Joven)</option>
+                            <option value="en-Grace_woman">VoxCPM2 - Grace (Mujer, Joven)</option>
+                            <option value="en-Emma_woman">VoxCPM2 - Emma (Mujer, Profesional)</option>
+                            <option value="windows_native">Windows Native (Velocidad Inmediata)</option>
+                        </select>
                         <audio id="studio-audio-player" class="hidden"></audio>
                         
                         <button id="btn-studio-regenerate" class="glow-button regenerate-btn" style="width: 100%; margin-top: 15px; background: linear-gradient(135deg, rgba(157, 78, 221, 0.6) 0%, rgba(0, 242, 254, 0.4) 100%);">

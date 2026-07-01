@@ -1098,40 +1098,49 @@ def reprocess_studio_block(task_id: str, req: ReprocessRequest):
         cmd = ["ffmpeg", "-y", "-i", vocals_path, "-ss", str(start_time), "-to", str(end_time), "-c", "copy", ref_wav]
         subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
-    # 3. Call TTS API directly for this single phrase
-    import requests
-    url = "http://127.0.0.1:8001/api/tts"
+    # 3. Call generate_individual_tts dynamically
+    from tts_client import generate_individual_tts
+    import shutil
     
-    temp_wav = os.path.join(tts_dir, f"phrase_{req.phrase_index}_raw.wav")
-    win_temp_wav = wsl_to_windows_path(temp_wav)
-    win_ref_wav = wsl_to_windows_path(ref_wav) if os.path.exists(ref_wav) else None
+    # We create a temporary directory for this single phrase to avoid overwriting others
+    temp_tts_dir = os.path.join(CACHE_DIR, task_id, "tts_temp_studio")
+    os.makedirs(temp_tts_dir, exist_ok=True)
     
-    payload = {
-        "text": req.text,
-        "speaker": req.speaker,
-        "output_path": win_temp_wav,
-        "cfg_value": req.vibevoice_cfg,
-        "inference_timesteps": req.vibevoice_steps,
-        "reference_wav_path": win_ref_wav if "Voz Clonada" in req.speaker else None
-    }
+    # If the speaker uses cloning, generate_individual_tts expects the reference wav at ref_{idx}.wav
+    temp_ref_wav = os.path.join(temp_tts_dir, "ref_0.wav")
+    if os.path.exists(ref_wav):
+        shutil.copy2(ref_wav, temp_ref_wav)
+        
+    dummy_chunks = [{"text": req.text, "timestamp": [start_time, end_time]}]
     
     try:
-        res = requests.post(url, json=payload, timeout=120)
-        if res.status_code != 200:
-            raise HTTPException(status_code=500, detail="TTS generation failed")
+        generated_paths = generate_individual_tts(
+            chunks=dummy_chunks,
+            tts_dir=temp_tts_dir,
+            speaker_name=req.speaker,
+            task_id=task_id,
+            vibevoice_model=req.vibevoice_model,
+            vibevoice_cfg=req.vibevoice_cfg,
+            vibevoice_steps=req.vibevoice_steps
+        )
+        
+        if not generated_paths or not os.path.exists(generated_paths[0]):
+            raise HTTPException(status_code=500, detail="TTS generation failed or returned no audio.")
             
+        # Move the generated file back to the main tts folder
         output_mp3 = os.path.join(tts_dir, f"phrase_{req.phrase_index}.mp3")
-        output_wav = os.path.join(tts_dir, f"phrase_{req.phrase_index}.wav")
         if os.path.exists(output_mp3):
             os.remove(output_mp3)
-        if os.path.exists(temp_wav):
-            if os.path.exists(output_wav):
-                os.remove(output_wav)
-            os.rename(temp_wav, output_wav)
-            
-        return {"status": "ok", "message": f"Phrase {req.phrase_index} regenerated successfully."}
+        shutil.copy2(generated_paths[0], output_mp3)
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Clean up temp dir
+        if os.path.exists(temp_tts_dir):
+            shutil.rmtree(temp_tts_dir, ignore_errors=True)
+            
+    return {"status": "ok", "message": f"Phrase {req.phrase_index} regenerated successfully."}
 
 @app.post("/api/studio/{task_id}/finalize")
 def finalize_studio_video(task_id: str):

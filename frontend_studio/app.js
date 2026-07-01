@@ -840,13 +840,16 @@ document.addEventListener('DOMContentLoaded', () => {
         btnStudioRegenerate.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Regenerando...';
         btnStudioRegenerate.disabled = true;
         
+        const selectStudioSpeaker = document.getElementById('select-studio-speaker');
+        const selectStudioTtsModel = document.getElementById('select-studio-tts-model');
+        
         const payload = {
             phrase_index: studioActiveBlock.phrase_index,
             text: studioTextarea.value,
-            speaker: (typeof selectSpeaker !== 'undefined') ? selectSpeaker.value : 'default',
-            vibevoice_model: (typeof selectVibevoiceModel !== 'undefined') ? selectVibevoiceModel.value : '',
-            vibevoice_cfg: (typeof inputVibevoiceCfg !== 'undefined') ? parseFloat(inputVibevoiceCfg.value) : 1.0,
-            vibevoice_steps: (typeof inputVibevoiceSteps !== 'undefined') ? parseInt(inputVibevoiceSteps.value) : 25
+            speaker: selectStudioSpeaker ? selectStudioSpeaker.value : 'cloned_speaker',
+            vibevoice_model: selectStudioTtsModel ? selectStudioTtsModel.value : 'openbmb/VoxCPM2',
+            vibevoice_cfg: 2.0, // Fixed optimal for VoxCPM2
+            vibevoice_steps: 10
         };
         
         fetch(`/api/studio/${currentTaskId}/reprocess`, {
