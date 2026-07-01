@@ -494,8 +494,11 @@ def synchronize_translation_for_tts(chunks: list, model: str) -> list:
                 print(f"  [Resumido] Bloque {idx} ajustado exitosamente al límite de tiempo.")
                 
         return chunks
+    except Exception as e:
+        print(f"[Sanador IA] Falló la sincronización: {e}. Usando texto largo original.")
+        return chunks
 
-def phonetic_normalization_for_tts(chunks: list, model: str = "llama3", save_dir: str = None) -> list:
+def phonetic_normalization_for_tts(chunks: list, model: str = "qwen3.5:9b", save_dir: str = None) -> list:
     """
     Escanea las frases buscando números o acrónimos. 
     Si los encuentra, delega a una IA Especializada la tarea de escribir su pronunciación fonética.
@@ -602,6 +605,3 @@ def phonetic_normalization_for_tts(chunks: list, model: str = "llama3", save_dir
             print(f"[Warning] No se pudo guardar spanish_phonetic.json: {e}")
             
     return chunks
-    except Exception as e:
-        print(f"[Sanador IA] Falló la sincronización: {e}. Usando texto largo original.")
-        return chunks

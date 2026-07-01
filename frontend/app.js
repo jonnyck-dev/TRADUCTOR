@@ -250,8 +250,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Start processing YouTube video
     // Local File Upload Logic
+    const localFileIndicator = document.getElementById('local-file-indicator');
+    const localFileName = document.getElementById('local-file-name');
+    const btnClearLocalFile = document.getElementById('btn-clear-local-file');
+    
     if (btnUploadLocal && localVideoFile) {
         btnUploadLocal.addEventListener('click', () => {
             localVideoFile.click();
@@ -261,11 +264,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const file = e.target.files[0];
             if (!file) return;
 
+            // Update UI to show selected file
+            if (localFileIndicator) localFileIndicator.classList.remove('hidden');
+            if (localFileName) localFileName.textContent = `${file.name} (Subiendo...)`;
+
             const formData = new FormData();
             formData.append("file", file);
 
             const originalBtnHtml = btnUploadLocal.innerHTML;
-            btnUploadLocal.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Subiendo y extrayendo audio...';
+            btnUploadLocal.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando...';
             btnUploadLocal.disabled = true;
 
             fetch('/api/upload', {
@@ -280,9 +287,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.status === 'ok' && data.task_id) {
                     youtubeUrlInput.value = 'cache:' + data.task_id;
                     if (chkUseCache) chkUseCache.checked = false;
-                    btnProcess.click();
+                    if (localFileName) localFileName.textContent = `${file.name} (Listo para comenzar)`;
                 } else {
                     alert("Error subiendo archivo: " + JSON.stringify(data));
+                    if (localFileIndicator) localFileIndicator.classList.add('hidden');
                 }
             })
             .catch(error => {
@@ -290,8 +298,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert("Error de red al subir el archivo.");
                 btnUploadLocal.innerHTML = originalBtnHtml;
                 btnUploadLocal.disabled = false;
+                if (localFileIndicator) localFileIndicator.classList.add('hidden');
             });
         });
+        
+        if (btnClearLocalFile) {
+            btnClearLocalFile.addEventListener('click', () => {
+                localVideoFile.value = '';
+                youtubeUrlInput.value = '';
+                if (localFileIndicator) localFileIndicator.classList.add('hidden');
+            });
+        }
     }
 
     btnProcess.addEventListener('click', () => {

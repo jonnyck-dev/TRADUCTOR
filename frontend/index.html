@@ -60,9 +60,18 @@
                         <!-- Carga Local -->
                         <div class="local-upload-container" style="margin-top: 15px;">
                             <input type="file" id="local-video-file" accept="video/mp4,video/x-m4v,video/*" style="display: none;">
-                            <button id="btn-upload-local" class="glow-button secondary-btn" style="width: 100%; background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.1);">
+                            <button id="btn-upload-local" class="glow-button secondary-btn" style="width: 100%; background: linear-gradient(135deg, #4c1d95, #312e81); border: 1px solid rgba(255,255,255,0.2); color: #f8fafc; text-shadow: 0px 2px 4px rgba(0,0,0,0.8); box-shadow: 0 4px 15px rgba(76, 29, 149, 0.4);">
                                 <i class="fa-solid fa-upload"></i> Subir Video Local (MP4)
                             </button>
+                            
+                            <!-- Indicador de Archivo Seleccionado -->
+                            <div id="local-file-indicator" class="hidden" style="margin-top: 10px; padding: 10px 15px; background: rgba(30, 41, 59, 0.8); border-radius: 8px; border: 1px solid rgba(147, 197, 253, 0.3); display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 8px rgba(0,0,0,0.5);">
+                                <div style="display: flex; align-items: center; gap: 10px; overflow: hidden;">
+                                    <i class="fa-solid fa-file-video" style="color: #60a5fa; font-size: 1.2rem;"></i>
+                                    <span id="local-file-name" style="color: #e2e8f0; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: monospace;">ningun_archivo.mp4</span>
+                                </div>
+                                <i id="btn-clear-local-file" class="fa-solid fa-circle-xmark" style="color: #ef4444; cursor: pointer; font-size: 1.1rem; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" title="Quitar video"></i>
+                            </div>
                         </div>
 
                         <!-- Modo Desarrollo: Usar Caché -->
