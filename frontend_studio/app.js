@@ -733,12 +733,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (navStudio) navStudio.addEventListener('click', (e) => { e.preventDefault(); openStudioView(); });
 
     function loadStudioData() {
-        const batchSize = (typeof inputBatchSize !== 'undefined') ? parseInt(inputBatchSize.value) || 5 : 5;
-        fetch(`/api/studio/${currentTaskId}/data?batch_size=${batchSize}`)
+        fetch(`/api/studio/${currentTaskId}/data`)
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'ok') {
-                    studioData = data.batches;
+                    studioData = data.phrases;
                     renderTimeline();
                 } else {
                     alert("Error loading studio data.");
@@ -785,16 +784,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Render Blocks
-        studioData.forEach(batch => {
-            const left = batch.start_time * PIXELS_PER_SECOND;
-            const width = (batch.end_time - batch.start_time) * PIXELS_PER_SECOND;
+        studioData.forEach(phrase => {
+            const left = phrase.start_time * PIXELS_PER_SECOND;
+            const width = (phrase.end_time - phrase.start_time) * PIXELS_PER_SECOND;
             
             // English Block
             const engBlock = document.createElement('div');
             engBlock.className = 'timeline-block english-block';
             engBlock.style.left = `${left}px`;
             engBlock.style.width = `${Math.max(width, 30)}px`;
-            engBlock.innerHTML = `<div class="waveform-bg"></div><span style="position:relative; z-index:1;">${batch.text}</span>`;
+            engBlock.innerHTML = `<div class="waveform-bg"></div><span style="position:relative; z-index:1;">${phrase.text}</span>`;
             trackEnglish.appendChild(engBlock);
             
             // Dubbed Block (Interactive)
@@ -802,24 +801,24 @@ document.addEventListener('DOMContentLoaded', () => {
             dubBlock.className = 'timeline-block dubbed-block';
             dubBlock.style.left = `${left}px`;
             dubBlock.style.width = `${Math.max(width, 30)}px`;
-            dubBlock.innerHTML = `<div class="waveform-bg"></div><span style="position:relative; z-index:1;">${batch.text}</span>`;
+            dubBlock.innerHTML = `<div class="waveform-bg"></div><span style="position:relative; z-index:1;">${phrase.text}</span>`;
             
             dubBlock.addEventListener('click', () => {
                 document.querySelectorAll('.dubbed-block').forEach(b => b.classList.remove('selected'));
                 dubBlock.classList.add('selected');
                 
-                selectStudioBlock(batch);
-                if (videoPlayer) videoPlayer.currentTime = batch.start_time;
+                selectStudioBlock(phrase);
+                if (videoPlayer) videoPlayer.currentTime = phrase.start_time;
             });
             
             trackDubbed.appendChild(dubBlock);
         });
     }
 
-    function selectStudioBlock(batch) {
-        studioActiveBlock = batch;
-        if (inspectorBlockName) inspectorBlockName.innerHTML = `<i class="fa-solid fa-cube text-teal"></i> Bloque #${batch.batch_index} [${formatTime(batch.start_time)} - ${formatTime(batch.end_time)}]`;
-        if (studioTextarea) studioTextarea.value = batch.text;
+    function selectStudioBlock(phrase) {
+        studioActiveBlock = phrase;
+        if (inspectorBlockName) inspectorBlockName.innerHTML = `<i class="fa-solid fa-cube text-teal"></i> Frase #${phrase.phrase_index} [${formatTime(phrase.start_time)} - ${formatTime(phrase.end_time)}]`;
+        if (studioTextarea) studioTextarea.value = phrase.text;
         if (inspectorContent) inspectorContent.classList.remove('hidden');
     }
 
@@ -831,7 +830,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (btnStudioPlayDub) btnStudioPlayDub.addEventListener('click', () => {
         if (!studioActiveBlock || !studioAudioPlayer) return;
-        studioAudioPlayer.src = `/api/studio/${currentTaskId}/audio/dubbed/${studioActiveBlock.batch_index}?t=${new Date().getTime()}`;
+        studioAudioPlayer.src = `/api/studio/${currentTaskId}/audio/dubbed/${studioActiveBlock.phrase_index}?t=${new Date().getTime()}`;
         studioAudioPlayer.play();
     });
 
@@ -842,7 +841,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnStudioRegenerate.disabled = true;
         
         const payload = {
-            batch_index: studioActiveBlock.batch_index,
+            phrase_index: studioActiveBlock.phrase_index,
             text: studioTextarea.value,
             speaker: (typeof selectSpeaker !== 'undefined') ? selectSpeaker.value : 'default',
             vibevoice_model: (typeof selectVibevoiceModel !== 'undefined') ? selectVibevoiceModel.value : '',
@@ -850,7 +849,7 @@ document.addEventListener('DOMContentLoaded', () => {
             vibevoice_steps: (typeof inputVibevoiceSteps !== 'undefined') ? parseInt(inputVibevoiceSteps.value) : 25
         };
         
-        fetch(`/api/studio/${currentTaskId}/reprocess?batch_size=${(typeof inputBatchSize !== 'undefined') ? parseInt(inputBatchSize.value)||5 : 5}`, {
+        fetch(`/api/studio/${currentTaskId}/reprocess`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

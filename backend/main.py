@@ -630,6 +630,54 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, v
             tts_chunks_for_sync = tts_chunks
             mp3_paths_for_sync = mp3_paths
         
+        # --- Phrase-level splitting for Studio Editor ---
+        if tts_mode == "sentence" and len(translated_chunks) > 1 and any(
+            len(sc.get("original_chunks", [])) > 1 for sc in tts_chunks_for_sync
+        ):
+            print(f"[TTS] Splitting sync blocks into individual phrases for Studio Editor...")
+            from audio_processor import proportional_split
+            import shutil
+            
+            individual_mp3s = []
+            individual_chunks = []
+            phrase_global_idx = 0
+            
+            for sync_idx, sync_chunk in enumerate(tts_chunks_for_sync):
+                original_phrases = sync_chunk.get("original_chunks", [])
+                if not original_phrases:
+                    continue
+                
+                if len(original_phrases) == 1:
+                    src_path = mp3_paths_for_sync[sync_idx]
+                    ext = os.path.splitext(src_path)[1]
+                    dst_path = os.path.join(tts_dir, f"phrase_{phrase_global_idx}{ext}")
+                    if os.path.exists(src_path) and os.path.abspath(src_path) != os.path.abspath(dst_path):
+                        shutil.copy2(src_path, dst_path)
+                    individual_mp3s.append(dst_path if os.path.exists(dst_path) else src_path)
+                    individual_chunks.extend(original_phrases)
+                    phrase_global_idx += 1
+                else:
+                    sync_path = mp3_paths_for_sync[sync_idx]
+                    phrase_temp_dir = os.path.join(tts_dir, f"phrase_split_{sync_idx}")
+                    os.makedirs(phrase_temp_dir, exist_ok=True)
+                    try:
+                        phrase_paths = proportional_split(sync_path, original_phrases, phrase_temp_dir)
+                        for phrase_path in phrase_paths:
+                            ext = os.path.splitext(phrase_path)[1]
+                            dst_path = os.path.join(tts_dir, f"phrase_{phrase_global_idx}{ext}")
+                            if os.path.exists(dst_path):
+                                os.remove(dst_path)
+                            os.rename(phrase_path, dst_path)
+                            individual_mp3s.append(dst_path)
+                            phrase_global_idx += 1
+                        individual_chunks.extend(original_phrases)
+                    finally:
+                        shutil.rmtree(phrase_temp_dir, ignore_errors=True)
+            
+            print(f"[TTS] Split into {len(individual_mp3s)} individual phrase files for Studio Editor.")
+            tts_chunks_for_sync = individual_chunks
+            mp3_paths_for_sync = individual_mp3s
+        
         output_video_path = os.path.join(output_dir, "video_dubbed.mp4")
         verification_report_path = os.path.join(whisper_dir, "verification_report.json")
         timing_report_path = os.path.join(output_dir, "timing_report.json")
@@ -942,45 +990,44 @@ from pydantic import BaseModel
 import io
 
 class ReprocessRequest(BaseModel):
-    batch_index: int
+    phrase_index: int
     text: str
     speaker: str
     vibevoice_model: str
     vibevoice_cfg: float
     vibevoice_steps: int
 
-@app.get("/api/studio/{task_id}/data")
-def get_studio_data(task_id: str, batch_size: int = 5):
+def get_latest_script_path(task_id: str):
     whisper_dir = os.path.join(CACHE_DIR, task_id, "whisper")
-    enhanced_json = os.path.join(whisper_dir, "spanish_enhanced.json")
-    if not os.path.exists(enhanced_json):
-        enhanced_json = os.path.join(whisper_dir, "spanish_translated.json")
-        if not os.path.exists(enhanced_json):
-            raise HTTPException(status_code=404, detail="Data not ready")
+    for p in ["spanish_4_final.json", "spanish_enhanced.json", "spanish_translated.json"]:
+        full_path = os.path.join(whisper_dir, p)
+        if os.path.exists(full_path):
+            return full_path
+    return None
+
+@app.get("/api/studio/{task_id}/data")
+def get_studio_data(task_id: str):
+    enhanced_json = get_latest_script_path(task_id)
+    if not enhanced_json:
+        raise HTTPException(status_code=404, detail="Data not ready")
             
     with open(enhanced_json, "r", encoding="utf-8") as f:
         data = json.load(f)
     chunks = data.get("chunks", [])
     
-    batches = []
     from audio_processor import get_flat_timestamp
-    for i in range(0, len(chunks), batch_size):
-        batch = chunks[i:i+batch_size]
-        merged_text = " ".join([c.get("text", "").strip() for c in batch if c.get("text", "").strip()])
-        if not merged_text:
-            continue
-            
-        start_time = get_flat_timestamp(batch[0].get("timestamp", [0.0, 0.0]))[0]
-        end_time = get_flat_timestamp(batch[-1].get("timestamp", [0.0, 0.0]))[1]
-        
-        batches.append({
-            "batch_index": i // batch_size,
-            "text": merged_text,
-            "start_time": start_time,
-            "end_time": end_time,
-            "phrases": batch
-        })
-    return {"status": "ok", "batches": batches}
+    phrases = []
+    for i, chunk in enumerate(chunks):
+        ts = get_flat_timestamp(chunk.get("timestamp", [0.0, 0.0]))
+        text = chunk.get("text", "").strip()
+        if text:
+            phrases.append({
+                "phrase_index": i,
+                "text": text,
+                "start_time": ts[0],
+                "end_time": ts[1]
+            })
+    return {"status": "ok", "phrases": phrases}
 
 @app.get("/api/studio/{task_id}/audio/original")
 def get_original_audio_slice(task_id: str, start: float, end: float):
@@ -1000,11 +1047,10 @@ def get_original_audio_slice(task_id: str, start: float, end: float):
     headers = {"Cache-Control": "public, max-age=3600"}
     return StreamingResponse(buf, media_type="audio/mpeg", headers=headers)
 
-@app.get("/api/studio/{task_id}/audio/dubbed/{batch_index}")
-def get_dubbed_audio(task_id: str, batch_index: int):
-    # Ensure cache busting
-    path_mp3 = os.path.join(CACHE_DIR, task_id, "tts", f"phrase_{batch_index}.mp3")
-    path_wav = os.path.join(CACHE_DIR, task_id, "tts", f"phrase_{batch_index}.wav")
+@app.get("/api/studio/{task_id}/audio/dubbed/{phrase_index}")
+def get_dubbed_audio(task_id: str, phrase_index: int):
+    path_mp3 = os.path.join(CACHE_DIR, task_id, "tts", f"phrase_{phrase_index}.mp3")
+    path_wav = os.path.join(CACHE_DIR, task_id, "tts", f"phrase_{phrase_index}.wav")
     
     headers = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
     if os.path.exists(path_mp3):
@@ -1012,53 +1058,50 @@ def get_dubbed_audio(task_id: str, batch_index: int):
     elif os.path.exists(path_wav):
         return FileResponse(path_wav, headers=headers)
     else:
-        raise HTTPException(status_code=404, detail="Dubbed audio not found for this block")
+        raise HTTPException(status_code=404, detail="Dubbed audio not found for this phrase")
 
 @app.post("/api/studio/{task_id}/reprocess")
-def reprocess_studio_block(task_id: str, req: ReprocessRequest, batch_size: int = 5):
-    """Regenerates the TTS for a specific block and updates the JSON script."""
+def reprocess_studio_block(task_id: str, req: ReprocessRequest):
+    """Regenerates the TTS for a single phrase and updates the JSON script."""
     tts_dir = os.path.join(CACHE_DIR, task_id, "tts")
     os.makedirs(tts_dir, exist_ok=True)
     
-    # 1. Update spanish_enhanced.json
-    enhanced_json = os.path.join(CACHE_DIR, task_id, "whisper", "spanish_enhanced.json")
-    if os.path.exists(enhanced_json):
-        with open(enhanced_json, "r", encoding="utf-8") as f:
-            data = json.load(f)
+    # 1. Update latest JSON script (single phrase only)
+    enhanced_json = get_latest_script_path(task_id)
+    if not enhanced_json:
+        raise HTTPException(status_code=404, detail="Cache script not found")
         
-        start_idx = req.batch_index * batch_size
-        if start_idx < len(data["chunks"]):
-            data["chunks"][start_idx]["text"] = req.text
-            for i in range(start_idx + 1, min(start_idx + batch_size, len(data["chunks"]))):
-                data["chunks"][i]["text"] = ""
+    with open(enhanced_json, "r", encoding="utf-8") as f:
+        data = json.load(f)
+        
+    if req.phrase_index >= len(data.get("chunks", [])):
+        raise HTTPException(status_code=400, detail="Invalid phrase_index out of range")
+        
+    data["chunks"][req.phrase_index]["text"] = req.text
+    with open(enhanced_json, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
                 
-            with open(enhanced_json, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-                
-    # 2. Extract specific vocal slice with ffmpeg
+    # 2. Extract specific vocal slice for voice cloning reference
     from audio_processor import get_flat_timestamp
     import subprocess
     from tts_client import wsl_to_windows_path
     
-    start_time = 0.0
-    end_time = 5.0
-    if os.path.exists(enhanced_json):
-        batch_chunks = data["chunks"][start_idx:min(start_idx + batch_size, len(data["chunks"]))]
-        if batch_chunks:
-            start_time = get_flat_timestamp(batch_chunks[0].get("timestamp", [0.0, 0.0]))[0]
-            end_time = get_flat_timestamp(batch_chunks[-1].get("timestamp", [0.0, 0.0]))[1]
+    phrase_chunk = data["chunks"][req.phrase_index]
+    ts = get_flat_timestamp(phrase_chunk.get("timestamp", [0.0, 5.0]))
+    start_time = ts[0]
+    end_time = ts[1]
             
     vocals_path = os.path.join(CACHE_DIR, task_id, "demucs", "htdemucs", "audio", "vocals.wav")
-    ref_wav = os.path.join(tts_dir, f"ref_{req.batch_index}.wav")
+    ref_wav = os.path.join(tts_dir, f"ref_{req.phrase_index}.wav")
     if os.path.exists(vocals_path):
         cmd = ["ffmpeg", "-y", "-i", vocals_path, "-ss", str(start_time), "-to", str(end_time), "-c", "copy", ref_wav]
         subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
-    # 3. Call VibeVoice API directly for this single phrase
+    # 3. Call TTS API directly for this single phrase
     import requests
     url = "http://127.0.0.1:8001/api/tts"
     
-    temp_wav = os.path.join(tts_dir, f"phrase_{req.batch_index}_raw.wav")
+    temp_wav = os.path.join(tts_dir, f"phrase_{req.phrase_index}_raw.wav")
     win_temp_wav = wsl_to_windows_path(temp_wav)
     win_ref_wav = wsl_to_windows_path(ref_wav) if os.path.exists(ref_wav) else None
     
@@ -1074,10 +1117,10 @@ def reprocess_studio_block(task_id: str, req: ReprocessRequest, batch_size: int 
     try:
         res = requests.post(url, json=payload, timeout=120)
         if res.status_code != 200:
-            raise HTTPException(status_code=500, detail="VibeVoice TTS generation failed")
+            raise HTTPException(status_code=500, detail="TTS generation failed")
             
-        output_mp3 = os.path.join(tts_dir, f"phrase_{req.batch_index}.mp3")
-        output_wav = os.path.join(tts_dir, f"phrase_{req.batch_index}.wav")
+        output_mp3 = os.path.join(tts_dir, f"phrase_{req.phrase_index}.mp3")
+        output_wav = os.path.join(tts_dir, f"phrase_{req.phrase_index}.wav")
         if os.path.exists(output_mp3):
             os.remove(output_mp3)
         if os.path.exists(temp_wav):
@@ -1085,7 +1128,7 @@ def reprocess_studio_block(task_id: str, req: ReprocessRequest, batch_size: int 
                 os.remove(output_wav)
             os.rename(temp_wav, output_wav)
             
-        return {"status": "ok", "message": f"Block {req.batch_index} regenerated successfully."}
+        return {"status": "ok", "message": f"Phrase {req.phrase_index} regenerated successfully."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

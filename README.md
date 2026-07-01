@@ -164,4 +164,16 @@ Este repositorio contiene varios archivos `.md` con propósitos específicos. Es
 
 Los planes de implementación pendientes se encuentran en `implementation_plan.md`, no en este archivo.
 
+---
+
+## Subproyectos
+
+Este repositorio contiene subproyectos con su propia lógica y documentación:
+
+| Subproyecto | Carpeta | Descripción |
+|-------------|---------|-------------|
+| **AEGIS Studio Editor** | `editor/` | Editor interactivo no-lineal para corrección de videos doblados. Frontend en `frontend_studio/`. |
+
+Cada subproyecto tiene su propio `README.md` con documentación, arquitectura, plan de implementación y bugs conocidos. Consultar la carpeta correspondiente para más detalles.
+
 
