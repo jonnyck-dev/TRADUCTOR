@@ -31,6 +31,7 @@ class TTSRequest(BaseModel):
     cfg_value: float = 2.0
     inference_timesteps: int = 10
     reference_wav_path: Optional[str] = None
+    normalize: bool = False
 
 @app.on_event("startup")
 def load_model():
@@ -61,7 +62,7 @@ def generate_tts(request: TTSRequest):
         
     try:
         with lock:
-            print(f"Processing VoxCPM TTS request: speaker='{request.speaker}', text='{request.text[:50]}...'")
+            print(f"Processing VoxCPM TTS request: speaker='{request.speaker}', text='{request.text[:50]}...', normalize={request.normalize}")
             
             # Map old VibeVoice generic voices to VoxCPM2 prompt descriptions
             speaker_mapping = {
@@ -103,13 +104,15 @@ def generate_tts(request: TTSRequest):
                     text=text_to_generate,
                     reference_wav_path=ref_path,
                     cfg_value=request.cfg_value,
-                    inference_timesteps=request.inference_timesteps
+                    inference_timesteps=request.inference_timesteps,
+                    normalize=request.normalize
                 )
             else:
                 wav = model.generate(
                     text=text_to_generate,
                     cfg_value=request.cfg_value,
-                    inference_timesteps=request.inference_timesteps
+                    inference_timesteps=request.inference_timesteps,
+                    normalize=request.normalize
                 )
                 
             # Ensure target directory exists

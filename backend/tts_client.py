@@ -316,7 +316,8 @@ def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-
                                 "output_path": win_temp_wav,
                                 "cfg_value": vibevoice_cfg,
                                 "inference_timesteps": vibevoice_steps,
-                                "reference_wav_path": win_cloned_wav_path if speaker_name == "cloned_speaker" else None
+                                "reference_wav_path": win_cloned_wav_path if speaker_name == "cloned_speaker" else None,
+                                "normalize": False
                             }
                         else:  # vibevoice
                             payload = {

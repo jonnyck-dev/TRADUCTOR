@@ -588,14 +588,6 @@ def phonetic_normalization_for_tts(chunks: list, model: str = "qwen3.5:9b", save
     else:
         print("[Sanador IA] No se encontraron números ni acrónimos. Omitiendo pase de IA Fonética.")
         
-    # Python Guillotine: Reemplazar 'y' aislada por 'e' en todas las frases incondicionalmente
-    for chunk in chunks:
-        old_text = chunk.get("text", "")
-        # Usar regex para encontrar " y " o " Y " como palabras aisladas
-        new_text = re.sub(r'\b[yY]\b', 'e', old_text)
-        if new_text != old_text:
-            chunk["text"] = new_text
-            
     if save_dir:
         out_path = os.path.join(save_dir, "spanish_phonetic.json")
         try:
