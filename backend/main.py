@@ -4,6 +4,7 @@ import json
 import traceback
 import subprocess
 from fastapi import FastAPI, BackgroundTasks, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
