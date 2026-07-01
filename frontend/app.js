@@ -883,11 +883,14 @@ document.addEventListener('DOMContentLoaded', () => {
         btnStudioRegenerate.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Regenerando (Toma ~5s)...';
         btnStudioRegenerate.disabled = true;
         
+        const selectStudioSpeaker = document.getElementById('select-studio-speaker');
+        const selectStudioTtsModel = document.getElementById('select-studio-tts-model');
+
         const payload = {
             phrase_index: studioActiveBlock.phrase_index,
             text: studioTextarea.value,
-            speaker: selectSpeaker.value,
-            vibevoice_model: selectVibevoiceModel.value,
+            speaker: selectStudioSpeaker ? selectStudioSpeaker.value : selectSpeaker.value,
+            vibevoice_model: selectStudioTtsModel ? selectStudioTtsModel.value : selectVibevoiceModel.value,
             vibevoice_cfg: parseFloat(inputVibevoiceCfg.value),
             vibevoice_steps: parseInt(inputVibevoiceSteps.value)
         };
