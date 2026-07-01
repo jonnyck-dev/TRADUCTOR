@@ -279,13 +279,24 @@
 
     <!-- Studio View (overlay in-app) -->
     <div id="studio-view" class="studio-container hidden">
-        <header class="app-header studio-header">
+        <header class="app-header studio-header" style="justify-content: space-between;">
             <div class="logo">
                 <i class="fa-solid fa-scissors purple-glow" style="color: #00f2fe;"></i>
                 <h1>AEGIS AUDIO EDITOR</h1>
                 <span class="badge" style="background: rgba(0, 242, 254, 0.2); color: #00f2fe;">v3.0</span>
             </div>
-            <button id="btn-close-studio" class="glow-button"><i class="fa-solid fa-arrow-left"></i> Volver al Inicio</button>
+            
+            <div style="display: flex; gap: 15px; align-items: center;">
+                <select id="select-studio-cache" class="studio-select" style="background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px 15px; border-radius: 4px; min-width: 200px;">
+                    <option value="">Cargando cachés...</option>
+                </select>
+                <button id="btn-studio-load-cache" class="glow-button" style="background: rgba(0, 242, 254, 0.1); border-color: rgba(0, 242, 254, 0.3); color: #00f2fe;">
+                    <i class="fa-solid fa-folder-open"></i> Cargar
+                </button>
+                <button id="btn-close-studio" class="glow-button" style="background: rgba(255,255,255,0.05); margin-left: 10px;">
+                    <i class="fa-solid fa-arrow-left"></i> Volver
+                </button>
+            </div>
         </header>
 
         <div class="studio-workspace">

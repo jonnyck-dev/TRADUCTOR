@@ -712,6 +712,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     const btnOpenStudio = document.getElementById('btn-open-studio');
     const btnCloseStudio = document.getElementById('btn-close-studio');
+    const selectStudioCache = document.getElementById('select-studio-cache');
+    const btnStudioLoadCache = document.getElementById('btn-studio-load-cache');
     const homeView = document.getElementById('home-view');
     const studioView = document.getElementById('studio-view');
     const studioVideoWrapper = document.getElementById('studio-video-wrapper');
@@ -750,17 +752,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function openStudioView() {
-        if (!currentTaskId) {
-            alert('Por favor, procesa o selecciona un caché primero.');
-            return;
-        }
         homeView.classList.add('hidden');
         studioView.classList.remove('hidden');
         studioVideoWrapper.appendChild(videoPlayer);
         videoPlayer.classList.remove('hidden');
         if (navHome) navHome.classList.remove('active');
         if (navStudio) navStudio.classList.add('active');
-        loadStudioData();
+        
+        loadStudioCaches(); // Populate the top right dropdown
+        
+        if (currentTaskId) {
+            loadStudioData();
+        } else {
+            // Reset inspector and wait for user to select a cache
+            studioActiveBlock = null;
+            document.getElementById('inspector-block-name').innerHTML = 'Selecciona un caché arriba y luego un bloque de audio en la línea de tiempo...';
+            document.getElementById('inspector-content').classList.add('hidden');
+            
+            // Clear timelines
+            document.getElementById('track-english').innerHTML = '';
+            document.getElementById('track-dubbed').innerHTML = '';
+            document.getElementById('track-video').innerHTML = '<div class="timeline-block video-block" style="width: 100%;"></div>';
+        }
     }
 
     function openHomeView() {
@@ -771,11 +784,42 @@ document.addEventListener('DOMContentLoaded', () => {
         if (navStudio) navStudio.classList.remove('active');
     }
 
-    btnOpenStudio.addEventListener('click', openStudioView);
-    btnCloseStudio.addEventListener('click', openHomeView);
+    function loadStudioCaches() {
+        if (!selectStudioCache) return;
+        fetch('/api/caches')
+            .then(res => res.json())
+            .then(data => {
+                const caches = data.caches || [];
+                selectStudioCache.innerHTML = '<option value="">Seleccionar Caché para Cargar...</option>';
+                caches.forEach(c => {
+                    const option = document.createElement('option');
+                    option.value = c;
+                    option.textContent = c;
+                    if (c === currentTaskId) option.selected = true;
+                    selectStudioCache.appendChild(option);
+                });
+            })
+            .catch(err => console.error("Error cargando cachés para estudio:", err));
+    }
+
+    if (btnOpenStudio) btnOpenStudio.addEventListener('click', openStudioView);
+    if (navStudio) navStudio.addEventListener('click', openStudioView);
     
-    if (navHome) navHome.addEventListener('click', (e) => { e.preventDefault(); openHomeView(); });
-    if (navStudio) navStudio.addEventListener('click', (e) => { e.preventDefault(); openStudioView(); });
+    if (btnCloseStudio) btnCloseStudio.addEventListener('click', openHomeView);
+    if (navHome) navHome.addEventListener('click', openHomeView);
+
+    if (btnStudioLoadCache) {
+        btnStudioLoadCache.addEventListener('click', () => {
+            const selectedCache = selectStudioCache.value;
+            if (!selectedCache) {
+                alert('Por favor, selecciona un caché de la lista.');
+                return;
+            }
+            currentTaskId = selectedCache;
+            videoPlayer.src = `/cache/${currentTaskId}/video_original.mp4`;
+            loadStudioData();
+        });
+    }
 
     function loadStudioData() {
         fetch(`/api/studio/${currentTaskId}/data`)
