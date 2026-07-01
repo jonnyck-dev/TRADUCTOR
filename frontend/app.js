@@ -898,8 +898,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (blockVideoDubbed) blockVideoDubbed.style.opacity = isV2Visible ? '1' : '0.2';
         if (blockVideoOrig) blockVideoOrig.style.opacity = isV1Visible ? '1' : '0.2';
         
-        videoPlayer.currentTime = currentTime;
-        if (wasPlaying) videoPlayer.play();
+        if (videoPlayer.readyState > 0) {
+            try {
+                videoPlayer.currentTime = currentTime;
+                if (wasPlaying) videoPlayer.play();
+            } catch(e) {}
+        } else {
+            videoPlayer.onloadedmetadata = () => {
+                try {
+                    videoPlayer.currentTime = currentTime;
+                    if (wasPlaying) videoPlayer.play();
+                } catch(e) {}
+                videoPlayer.onloadedmetadata = null; // clear
+            };
+        }
     }
 
     if (btnVisDubbed) {
