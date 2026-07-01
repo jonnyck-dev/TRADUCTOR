@@ -789,9 +789,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Apply priority logic (V2 over V1)
             isV2Visible = true;
             isV1Visible = false;
-            updateVideoSource();
             
             loadStudioData();
+            updateVideoSource();
         } else {
             if (cacheOverlay) cacheOverlay.classList.remove('hidden');
             videoPlayer.classList.add('hidden');
@@ -863,9 +863,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             isV2Visible = true;
             isV1Visible = false;
-            updateVideoSource();
             
             loadStudioData();
+            updateVideoSource();
         });
     }
 
@@ -904,13 +904,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (wasPlaying) videoPlayer.play();
             } catch(e) {}
         } else {
-            videoPlayer.onloadedmetadata = () => {
+            videoPlayer.addEventListener('loadedmetadata', function onMeta() {
                 try {
                     videoPlayer.currentTime = currentTime;
                     if (wasPlaying) videoPlayer.play();
                 } catch(e) {}
-                videoPlayer.onloadedmetadata = null; // clear
-            };
+                // Re-render timeline now that we have the real duration
+                if (studioData && studioData.length > 0) {
+                    console.log('[Studio] Video metadata loaded, re-rendering timeline with duration:', videoPlayer.duration);
+                    renderTimeline();
+                }
+                videoPlayer.removeEventListener('loadedmetadata', onMeta);
+            });
         }
     }
 
@@ -964,13 +969,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadStudioData() {
+        console.log('[Studio] loadStudioData called for task:', currentTaskId);
         fetch(`/api/studio/${currentTaskId}/data`)
-            .then(res => res.json())
+            .then(res => {
+                console.log('[Studio] API response status:', res.status);
+                return res.json();
+            })
             .then(data => {
+                console.log('[Studio] API data received:', data.status, 'phrases:', data.phrases ? data.phrases.length : 0);
                 if (data.status === 'ok') {
                     studioData = data.phrases;
                     renderTimeline();
                 } else {
+                    console.error('[Studio] API returned non-ok status:', data);
                     alert("Error loading studio data.");
                 }
             })
@@ -978,14 +989,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderTimeline() {
+        console.log('[Studio] renderTimeline called. studioData length:', studioData ? studioData.length : 'null');
+        console.log('[Studio] trackEnglish:', trackEnglish, 'trackDubbed:', trackDubbed);
+        
+        if (!trackEnglish || !trackDubbed) {
+            console.error('[Studio] CRITICAL: track DOM elements are null!');
+            return;
+        }
+        
         trackEnglish.innerHTML = '';
         trackDubbed.innerHTML = '';
         timelineRuler.innerHTML = '';
         
-        if (!studioData || studioData.length === 0) return;
+        if (!studioData || studioData.length === 0) {
+            console.warn('[Studio] No studioData to render');
+            return;
+        }
         
         let totalDuration = videoPlayer.duration || studioData[studioData.length - 1].end_time;
         if (isNaN(totalDuration) || totalDuration <= 0) totalDuration = 100; // fallback
+        console.log('[Studio] totalDuration:', totalDuration, '(video.duration:', videoPlayer.duration, ')');
         
         const totalWidth = totalDuration * PIXELS_PER_SECOND;
         
