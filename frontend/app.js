@@ -714,6 +714,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnCloseStudio = document.getElementById('btn-close-studio');
     const selectStudioCache = document.getElementById('select-studio-cache');
     const btnStudioLoadCache = document.getElementById('btn-studio-load-cache');
+    const studioVideoControls = document.getElementById('studio-video-controls');
+    const selectVideoSource = document.getElementById('select-video-source');
     const homeView = document.getElementById('home-view');
     const studioView = document.getElementById('studio-view');
     const studioVideoWrapper = document.getElementById('studio-video-wrapper');
@@ -766,8 +768,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentTaskId) {
             if (cacheOverlay) cacheOverlay.classList.add('hidden');
             videoPlayer.classList.remove('hidden');
+            if (studioVideoControls) studioVideoControls.classList.remove('hidden');
             
             // In Studio, we always use the original video so previews work correctly over it
+            if (selectVideoSource) selectVideoSource.value = 'original';
             if (!videoPlayer.src.includes(`/api/stream_original/${currentTaskId}`)) {
                 videoPlayer.src = `/api/stream_original/${currentTaskId}`;
             }
@@ -776,6 +780,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             if (cacheOverlay) cacheOverlay.classList.remove('hidden');
             videoPlayer.classList.add('hidden');
+            if (studioVideoControls) studioVideoControls.classList.add('hidden');
             
             // Reset inspector and wait for user to select a cache
             studioActiveBlock = null;
@@ -839,9 +844,31 @@ document.addEventListener('DOMContentLoaded', () => {
             const cacheOverlay = document.getElementById('studio-cache-overlay');
             if (cacheOverlay) cacheOverlay.classList.add('hidden');
             videoPlayer.classList.remove('hidden');
+            if (studioVideoControls) studioVideoControls.classList.remove('hidden');
             
+            if (selectVideoSource) selectVideoSource.value = 'original';
             videoPlayer.src = `/api/stream_original/${currentTaskId}`;
             loadStudioData();
+        });
+    }
+
+    if (selectVideoSource) {
+        selectVideoSource.addEventListener('change', (e) => {
+            if (!currentTaskId) return;
+            const val = e.target.value;
+            const wasPlaying = !videoPlayer.paused;
+            const currentTime = videoPlayer.currentTime;
+            
+            if (val === 'original') {
+                videoPlayer.src = `/api/stream_original/${currentTaskId}`;
+            } else {
+                videoPlayer.src = `/api/stream/${currentTaskId}?t=${new Date().getTime()}`;
+            }
+            
+            videoPlayer.currentTime = currentTime;
+            if (wasPlaying) {
+                videoPlayer.play();
+            }
         });
     }
 
