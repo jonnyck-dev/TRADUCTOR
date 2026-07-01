@@ -279,28 +279,26 @@
 
     <!-- Studio View (overlay in-app) -->
     <div id="studio-view" class="studio-container hidden">
-        <header class="app-header studio-header" style="justify-content: space-between;">
+        <header class="app-header studio-header">
             <div class="logo">
                 <i class="fa-solid fa-scissors purple-glow" style="color: #00f2fe;"></i>
                 <h1>AEGIS AUDIO EDITOR</h1>
                 <span class="badge" style="background: rgba(0, 242, 254, 0.2); color: #00f2fe;">v3.0</span>
             </div>
-            
-            <div style="display: flex; gap: 15px; align-items: center;">
-                <select id="select-studio-cache" class="studio-select" style="background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px 15px; border-radius: 4px; min-width: 200px;">
-                    <option value="">Cargando cachés...</option>
-                </select>
-                <button id="btn-studio-load-cache" class="glow-button" style="background: rgba(0, 242, 254, 0.1); border-color: rgba(0, 242, 254, 0.3); color: #00f2fe;">
-                    <i class="fa-solid fa-folder-open"></i> Cargar
-                </button>
-                <button id="btn-close-studio" class="glow-button" style="background: rgba(255,255,255,0.05); margin-left: 10px;">
-                    <i class="fa-solid fa-arrow-left"></i> Volver
-                </button>
-            </div>
+            <button id="btn-close-studio" class="glow-button"><i class="fa-solid fa-arrow-left"></i> Volver al Inicio</button>
         </header>
 
         <div class="studio-workspace">
             <div class="studio-left">
+                <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                    <i class="fa-solid fa-database text-teal" style="font-size: 18px; margin-right: 5px;"></i>
+                    <select id="select-studio-cache" class="studio-select" style="flex: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px; border-radius: 4px;">
+                        <option value="">Cargando cachés...</option>
+                    </select>
+                    <button id="btn-studio-load-cache" class="glow-button" style="background: rgba(0, 242, 254, 0.1); border-color: rgba(0, 242, 254, 0.3); color: #00f2fe; white-space: nowrap; padding: 8px 15px;">
+                        <i class="fa-solid fa-folder-open"></i> Cargar Caché
+                    </button>
+                </div>
                 <div id="studio-video-wrapper" class="studio-video-wrapper"></div>
             </div>
 
