@@ -868,6 +868,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!studioActiveBlock) return;
         studioAudioPlayer.src = `/api/studio/${currentTaskId}/audio/original?start=${studioActiveBlock.start_time}&end=${studioActiveBlock.end_time}`;
         studioAudioPlayer.play();
+        
+        if (typeof videoPlayer !== 'undefined' && videoPlayer) {
+            videoPlayer.currentTime = studioActiveBlock.start_time;
+            videoPlayer.muted = true;
+            videoPlayer.play();
+            studioAudioPlayer.onended = () => videoPlayer.pause();
+        }
     });
 
     btnStudioPlayDub.addEventListener('click', () => {
@@ -875,6 +882,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Anti-cache string
         studioAudioPlayer.src = `/api/studio/${currentTaskId}/audio/dubbed/${studioActiveBlock.phrase_index}?t=${new Date().getTime()}`;
         studioAudioPlayer.play();
+        
+        if (typeof videoPlayer !== 'undefined' && videoPlayer) {
+            videoPlayer.currentTime = studioActiveBlock.start_time;
+            videoPlayer.muted = true;
+            videoPlayer.play();
+            studioAudioPlayer.onended = () => videoPlayer.pause();
+        }
     });
 
     btnStudioRegenerate.addEventListener('click', () => {
