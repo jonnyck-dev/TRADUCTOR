@@ -32,6 +32,10 @@ Este proyecto es una aplicación web local que automatiza el proceso de traducci
 9. **Registro y Visualización de Timers (Optimización)**:
    - Medición precisa de cada fase en el backend (`process_translation_task` en `backend/main.py`) guardando los resultados en `timing_report.json` dentro del directorio de caché de la tarea.
    - Integración visual en el frontend (`index.html`, `app.js`, `style.css`) mediante un panel interactivo con barras de progreso de colores para cada fase y resumen de duración total, permitiendo diagnosticar cuellos de botella con facilidad.
+10. **Interfaz Adaptativa y Renderizado Nativo (UI/UX)**:
+   - Uso de la propiedad CSS `color-scheme: dark;` a nivel de raíz (`:root`) para delegar el renderizado de componentes base al navegador.
+   - Esto obliga a Chrome/Edge a utilizar versiones con diseño oscuro de controles nativos como `<select>` (menús desplegables) y scrollbars sin requerir hacks de CSS.
+   - Soluciona de forma limpia problemas de ilegibilidad y permite una fácil transición futura a modos claros dinámicos (`color-scheme: light dark;`).
 
 ---
 
