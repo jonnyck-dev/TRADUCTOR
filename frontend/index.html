@@ -309,19 +309,26 @@
                         
                         <label style="margin-top: 15px; display: block;">MODELO TTS</label>
                         <select id="select-studio-tts-model" class="studio-select" style="width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px; border-radius: 4px;">
-                            <option value="openbmb/VoxCPM2">VoxCPM2 (Español Perfecto)</option>
-                            <option value="VibeVoice-1.5B">VibeVoice 1.5B (Original)</option>
-                            <option value="VibeVoice-2B">VibeVoice 2B (Alta Calidad)</option>
+                            <option value="openbmb/VoxCPM2" selected>VoxCPM2 (Hifi - 2.0B)</option>
+                            <option value="VibeVoice-1.5B">VibeVoice 1.5B (Standard)</option>
+                            <option value="VibeVoice-Realtime-0.5B">VibeVoice 0.5B (Streaming)</option>
                         </select>
                         
                         <label style="margin-top: 15px; display: block;">VOZ (SPEAKER)</label>
                         <select id="select-studio-speaker" class="studio-select" style="width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px; border-radius: 4px; margin-bottom: 10px;">
-                            <option value="cloned_speaker">Voz Clonada (Extraída de esta frase)</option>
-                            <option value="en-Frank_man">VoxCPM2 - Frank (Hombre, Madura)</option>
-                            <option value="en-Carter_man">VoxCPM2 - Carter (Hombre, Joven)</option>
-                            <option value="en-Grace_woman">VoxCPM2 - Grace (Mujer, Joven)</option>
-                            <option value="en-Emma_woman">VoxCPM2 - Emma (Mujer, Profesional)</option>
-                            <option value="windows_native">Windows Native (Velocidad Inmediata)</option>
+                            <optgroup label="Doblaje Personalizado">
+                                <option value="cloned_speaker" selected>🗣️ Voz Clonada (Extraída de esta frase)</option>
+                            </optgroup>
+                            <optgroup label="Voces de Doblaje (VoxCPM / VibeVoice)">
+                                <option value="en-Frank_man">(Hombre) Frank</option>
+                                <option value="en-Carter_man">(Hombre) Carter</option>
+                                <option value="en-Davis_man">(Hombre) Davis</option>
+                                <option value="en-Grace_woman">(Mujer) Grace</option>
+                                <option value="en-Emma_woman">(Mujer) Emma</option>
+                            </optgroup>
+                            <optgroup label="TTS Rápido (Windows)">
+                                <option value="windows_native">🤖 Voz Robótica (Nativa Windows)</option>
+                            </optgroup>
                         </select>
                         <audio id="studio-audio-player" class="hidden"></audio>
 

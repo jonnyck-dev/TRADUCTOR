@@ -559,6 +559,14 @@ video {
     box-shadow: 0 0 10px rgba(157, 78, 221, 0.15);
 }
 
+.select-wrapper select option,
+.select-wrapper select optgroup,
+.studio-select option,
+.studio-select optgroup {
+    background-color: var(--bg-dark);
+    color: var(--color-text-main);
+}
+
 .dropdown-icon {
     position: absolute;
     right: 14px;
