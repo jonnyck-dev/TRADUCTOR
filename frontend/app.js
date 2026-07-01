@@ -766,6 +766,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentTaskId) {
             if (cacheOverlay) cacheOverlay.classList.add('hidden');
             videoPlayer.classList.remove('hidden');
+            
+            // In Studio, we always use the original video so previews work correctly over it
+            if (!videoPlayer.src.includes(`/api/stream_original/${currentTaskId}`)) {
+                videoPlayer.src = `/api/stream_original/${currentTaskId}`;
+            }
+            
             loadStudioData();
         } else {
             if (cacheOverlay) cacheOverlay.classList.remove('hidden');
@@ -789,6 +795,13 @@ document.addEventListener('DOMContentLoaded', () => {
         homeView.classList.remove('hidden');
         if (navHome) navHome.classList.add('active');
         if (navStudio) navStudio.classList.remove('active');
+        
+        // In Home view, we always show the finalized dubbed video
+        if (currentTaskId) {
+            if (!videoPlayer.src.includes(`/api/stream/${currentTaskId}`)) {
+                videoPlayer.src = `/api/stream/${currentTaskId}?t=${new Date().getTime()}`;
+            }
+        }
     }
 
     function loadStudioCaches() {
@@ -827,7 +840,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (cacheOverlay) cacheOverlay.classList.add('hidden');
             videoPlayer.classList.remove('hidden');
             
-            videoPlayer.src = `/cache/${currentTaskId}/video_original.mp4`;
+            videoPlayer.src = `/api/stream_original/${currentTaskId}`;
             loadStudioData();
         });
     }

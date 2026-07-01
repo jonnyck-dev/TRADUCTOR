@@ -922,6 +922,54 @@ import re
 from fastapi import Request
 from fastapi.responses import StreamingResponse
 
+@app.get("/api/stream_original/{task_id}")
+def stream_original_video(task_id: str, request: Request):
+    video_path = os.path.join(CACHE_DIR, task_id, "downloads", "video.mp4")
+    if not os.path.exists(video_path):
+        raise HTTPException(status_code=404, detail="Original video not found")
+        
+    file_size = os.path.getsize(video_path)
+    range_header = request.headers.get("range")
+    
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Type": "video/mp4",
+        "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges",
+        "Cache-Control": "no-cache",
+    }
+    
+    if not range_header:
+        headers["Content-Length"] = str(file_size)
+        return FileResponse(video_path, headers=headers)
+        
+    try:
+        byte1, byte2 = 0, None
+        match = re.search(r'bytes=(\d+)-(\d*)', range_header)
+        if match:
+            byte1 = int(match.group(1))
+            if match.group(2):
+                byte2 = int(match.group(2))
+    except Exception:
+        byte1 = 0
+        
+    if byte2 is None or byte2 >= file_size:
+        byte2 = file_size - 1
+        
+    length = byte2 - byte1 + 1
+    headers["Content-Length"] = str(length)
+    headers["Content-Range"] = f"bytes {byte1}-{byte2}/{file_size}"
+    
+    with open(video_path, "rb") as f:
+        f.seek(byte1)
+        data = f.read(length)
+        
+    return StreamingResponse(
+        iter([data]), 
+        status_code=206, 
+        headers=headers, 
+        media_type="video/mp4"
+    )
+
 @app.get("/api/stream/{task_id}")
 def stream_video(task_id: str, request: Request):
     video_path = os.path.join(CACHE_DIR, task_id, "video_dubbed.mp4")
