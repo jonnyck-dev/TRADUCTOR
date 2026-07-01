@@ -717,11 +717,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnMuteDubbed = document.getElementById('btn-mute-dubbed');
     const btnMuteOriginal = document.getElementById('btn-mute-original');
     const btnMutePhrase = document.getElementById('btn-mute-phrase');
+    const btnVisDubbed = document.getElementById('btn-vis-dubbed');
+    const btnVisOriginal = document.getElementById('btn-vis-original');
+    
     let isDubbedMuted = false;
     let isOriginalMuted = false;
     let isPhraseMuted = false;
-    const studioVideoControls = document.getElementById('studio-video-controls');
-    const selectVideoSource = document.getElementById('select-video-source');
+    
+    let isV2Visible = false; // Dubbed
+    let isV1Visible = true;  // Original
+    
     const homeView = document.getElementById('home-view');
     const studioView = document.getElementById('studio-view');
     const studioVideoWrapper = document.getElementById('studio-video-wrapper');
@@ -735,8 +740,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const trackEnglish = document.getElementById('track-english');
     const trackDubbed = document.getElementById('track-dubbed');
     const timelineRuler = document.getElementById('timeline-ruler');
-    const trackVideo = document.getElementById('track-video');
-    const videoBlock = trackVideo.querySelector('.video-block');
+    const trackVideoDubbed = document.getElementById('track-video-dubbed');
+    const trackVideoOrig = document.getElementById('track-video-orig');
+    const blockVideoDubbed = document.getElementById('block-video-dubbed');
+    const blockVideoOrig = document.getElementById('block-video-orig');
     
     // Inspector elements
     const inspectorBlockName = document.getElementById('inspector-block-name');
@@ -777,10 +784,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (studioVideoControls) studioVideoControls.classList.remove('hidden');
             
             // In Studio, we always use the original video so previews work correctly over it
-            if (selectVideoSource) selectVideoSource.value = 'original';
-            if (!videoPlayer.src.includes(`/api/stream_original/${currentTaskId}`)) {
-                videoPlayer.src = `/api/stream_original/${currentTaskId}`;
-            }
+            if (btnVisDubbed) btnVisDubbed.closest('.track-label').classList.remove('hidden');
+            
+            // Apply priority logic (V2 over V1)
+            isV2Visible = false;
+            isV1Visible = true;
+            updateVideoSource();
             
             loadStudioData();
         } else {
@@ -852,31 +861,58 @@ document.addEventListener('DOMContentLoaded', () => {
             videoPlayer.classList.remove('hidden');
             if (studioVideoControls) studioVideoControls.classList.remove('hidden');
             
-            if (selectVideoSource) selectVideoSource.value = 'original';
-            videoPlayer.src = `/api/stream_original/${currentTaskId}`;
+            isV2Visible = false;
+            isV1Visible = true;
+            updateVideoSource();
+            
             loadStudioData();
         });
     }
 
-    if (selectVideoSource) {
-        selectVideoSource.addEventListener('change', (e) => {
-            if (!currentTaskId) return;
-            const val = e.target.value;
-            const wasPlaying = !videoPlayer.paused;
-            const currentTime = videoPlayer.currentTime;
-            
-            if (val === 'original') {
-                videoPlayer.src = `/api/stream_original/${currentTaskId}`;
-                videoPlayer.muted = isOriginalMuted;
-            } else {
+    function updateVideoSource() {
+        if (!currentTaskId) return;
+        const wasPlaying = !videoPlayer.paused;
+        const currentTime = videoPlayer.currentTime;
+        
+        if (isV2Visible) {
+            if (!videoPlayer.src.includes(`/api/stream/${currentTaskId}`)) {
                 videoPlayer.src = `/api/stream/${currentTaskId}?t=${new Date().getTime()}`;
-                videoPlayer.muted = isDubbedMuted;
             }
-            
-            videoPlayer.currentTime = currentTime;
-            if (wasPlaying) {
-                videoPlayer.play();
+            videoPlayer.muted = isDubbedMuted;
+        } else if (isV1Visible) {
+            if (!videoPlayer.src.includes(`/api/stream_original/${currentTaskId}`)) {
+                videoPlayer.src = `/api/stream_original/${currentTaskId}`;
             }
+            videoPlayer.muted = isOriginalMuted;
+        }
+        
+        if (btnVisDubbed) {
+            btnVisDubbed.innerHTML = isV2Visible ? '<i class="fa-solid fa-eye"></i>' : '<i class="fa-solid fa-eye-slash text-gray"></i>';
+            btnVisDubbed.style.color = isV2Visible ? '#00f2fe' : '';
+        }
+        if (btnVisOriginal) {
+            btnVisOriginal.innerHTML = isV1Visible ? '<i class="fa-solid fa-eye"></i>' : '<i class="fa-solid fa-eye-slash text-gray"></i>';
+            btnVisOriginal.style.color = isV1Visible ? 'white' : '';
+        }
+        
+        if (blockVideoDubbed) blockVideoDubbed.style.opacity = isV2Visible ? '1' : '0.2';
+        if (blockVideoOrig) blockVideoOrig.style.opacity = isV1Visible ? '1' : '0.2';
+        
+        videoPlayer.currentTime = currentTime;
+        if (wasPlaying) videoPlayer.play();
+    }
+
+    if (btnVisDubbed) {
+        btnVisDubbed.addEventListener('click', () => {
+            isV2Visible = !isV2Visible;
+            updateVideoSource();
+        });
+    }
+
+    if (btnVisOriginal) {
+        btnVisOriginal.addEventListener('click', () => {
+            isV1Visible = !isV1Visible;
+            updateVideoSource();
         });
     }
 
@@ -889,7 +925,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnMuteDubbed.addEventListener('click', () => {
             isDubbedMuted = !isDubbedMuted;
             updateMuteUI(btnMuteDubbed, isDubbedMuted);
-            if (selectVideoSource && selectVideoSource.value === 'dubbed') {
+            if (isV2Visible) {
                 videoPlayer.muted = isDubbedMuted;
             }
         });
@@ -899,7 +935,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnMuteOriginal.addEventListener('click', () => {
             isOriginalMuted = !isOriginalMuted;
             updateMuteUI(btnMuteOriginal, isOriginalMuted);
-            if (selectVideoSource && selectVideoSource.value === 'original') {
+            if (!isV2Visible && isV1Visible) {
                 videoPlayer.muted = isOriginalMuted;
             }
         });
@@ -945,8 +981,14 @@ document.addEventListener('DOMContentLoaded', () => {
         trackEnglish.style.width = `${totalWidth}px`;
         trackDubbed.style.width = `${totalWidth}px`;
         timelineRuler.style.width = `${totalWidth}px`;
-        videoBlock.style.width = `${totalWidth}px`;
-        videoBlock.innerHTML = `<span style="position:relative; z-index:1; font-weight:bold;">Video Original (${formatTime(totalDuration)})</span>`;
+        if (blockVideoDubbed) {
+            blockVideoDubbed.style.width = `${totalWidth}px`;
+            blockVideoDubbed.innerHTML = `<span style="position:relative; z-index:1; font-weight:bold; color: white;">Video Doblado (${formatTime(totalDuration)})</span>`;
+        }
+        if (blockVideoOrig) {
+            blockVideoOrig.style.width = `${totalWidth}px`;
+            blockVideoOrig.innerHTML = `<span style="position:relative; z-index:1; font-weight:bold; color: white;">Video Original (${formatTime(totalDuration)})</span>`;
+        }
         
         // Build Ruler Marks
         for (let s = 0; s <= totalDuration; s += 10) {

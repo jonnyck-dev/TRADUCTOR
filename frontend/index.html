@@ -308,15 +308,6 @@
                         </div>
                     </div>
                 </div>
-                <!-- Controles de Video Superior -->
-                <div id="studio-video-controls" class="hidden" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-                    <i class="fa-solid fa-film text-teal"></i>
-                    <span class="text-gray" style="font-size: 13px; font-weight: bold; white-space: nowrap;">VIDEO DE FONDO:</span>
-                    <select id="select-video-source" style="flex: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 6px; border-radius: 4px; font-size: 13px; outline: none;">
-                        <option value="original">Original Inglés (Para sincronizar nuevas frases)</option>
-                        <option value="dubbed">Doblado Ensamblado (Escuchar versión actual)</option>
-                    </select>
-                </div>
                 <div id="studio-video-wrapper" class="studio-video-wrapper"></div>
             </div>
 
@@ -375,7 +366,14 @@
 
             <div class="timeline-container">
                 <div class="timeline-track-labels">
-                    <div class="track-label video-track">V1 | Video Visual</div>
+                    <div class="track-label video-track" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0, 242, 254, 0.1);">
+                        <span>V2 | Video Doblado</span>
+                        <button id="btn-vis-dubbed" class="timeline-mute-btn" title="Mostrar/Ocultar" style="background: none; border: none; color: #00f2fe; cursor: pointer;"><i class="fa-solid fa-eye-slash"></i></button>
+                    </div>
+                    <div class="track-label video-track" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>V1 | Video Original</span>
+                        <button id="btn-vis-original" class="timeline-mute-btn" title="Mostrar/Ocultar" style="background: none; border: none; color: white; cursor: pointer;"><i class="fa-solid fa-eye"></i></button>
+                    </div>
                     <div class="track-label dubbed-track" style="color: #00f2fe; display: flex; justify-content: space-between; align-items: center;">
                         <span>A1 | Doblaje Global</span>
                         <button id="btn-mute-dubbed" class="timeline-mute-btn" title="Silenciar/Activar" style="background: none; border: none; color: inherit; cursor: pointer;"><i class="fa-solid fa-volume-high"></i></button>
@@ -391,8 +389,11 @@
                 </div>
                 <div class="timeline-scroll-area" id="timeline-scroll-area">
                     <div class="timeline-ruler" id="timeline-ruler"></div>
-                    <div class="timeline-track" id="track-video">
-                        <div class="timeline-block video-block" style="width: 100%;"></div>
+                    <div class="timeline-track" id="track-video-dubbed" style="background: rgba(0, 242, 254, 0.05);">
+                        <div class="timeline-block video-block" id="block-video-dubbed" style="width: 100%; background: linear-gradient(180deg, rgba(0, 242, 254, 0.3) 0%, rgba(0, 242, 254, 0.1) 100%);"></div>
+                    </div>
+                    <div class="timeline-track" id="track-video-orig">
+                        <div class="timeline-block video-block" id="block-video-orig" style="width: 100%;"></div>
                     </div>
                     <div class="timeline-track" id="track-dubbed"></div>
                     <div class="timeline-track" id="track-english"></div>
