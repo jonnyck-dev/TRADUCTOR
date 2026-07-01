@@ -113,3 +113,13 @@ Este proyecto es una aplicación web local que automatiza el proceso de traducci
 - **Contexto**: El checkpoint de VibeVoice-1.5B tiene 3 archivos `.safetensors` (~1.8 GB c/u) que se cargan secuencialmente.
 - **Objetivo**: Fusionarlos en un solo `model.safetensors` para reducir overhead de carga (~1-2s más rápido).
 - **Nota**: Requiere respaldar los shards originales antes de ejecutar. Se modifica el proyecto VibeVoice, no el Traductor.
+
+### 4. Optimización de Arquitectura de Separación (Demucs Puro)
+- **Problema**: Actualmente se usa el entorno pesado `audio-separator` (basado en UVR5) que acarrea "Cold Starts" lentos (10-20s) debido al exceso de librerías innecesarias (Gradio, PyQt, etc.) y la abstracción pesada al cargar el modelo `htdemucs_ft`.
+- **Solución (Fase Local)**:
+  - Eliminar por completo el entorno UVR5/`audio-separator`.
+  - Instalar el paquete oficial de Meta (`demucs` puro, sin GUI) usando `uv` en un entorno virtual limpio (`venv_demucs`).
+  - Mantener la arquitectura de carga/descarga bajo demanda (arrancar subproceso, procesar, destruir) para no acaparar memoria VRAM que necesitan VoxCPM2 y Ollama, pero el tiempo de carga caerá drásticamente por no tener "grasa".
+- **Solución (Fase Servidor/Nube - A Futuro)**:
+  - Crear un microservicio residente `demucs_server.py` que mantenga los tensores del modelo precargados en la VRAM de la GPU permanentemente.
+  - Esto reducirá la latencia de inicio de separación a **0 milisegundos**, siendo el estándar de la industria para despliegues escalables donde la VRAM no es un cuello de botella compartido.
