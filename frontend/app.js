@@ -781,8 +781,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentTaskId) {
             if (cacheOverlay) cacheOverlay.classList.add('hidden');
             videoPlayer.classList.remove('hidden');
-            if (studioVideoControls) studioVideoControls.classList.remove('hidden');
-            
             // In Studio, we always use the original video so previews work correctly over it
             if (btnVisDubbed) btnVisDubbed.closest('.track-label').classList.remove('hidden');
             
@@ -795,7 +793,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             if (cacheOverlay) cacheOverlay.classList.remove('hidden');
             videoPlayer.classList.add('hidden');
-            if (studioVideoControls) studioVideoControls.classList.add('hidden');
+
             
             // Reset inspector and wait for user to select a cache
             studioActiveBlock = null;
@@ -859,7 +857,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const cacheOverlay = document.getElementById('studio-cache-overlay');
             if (cacheOverlay) cacheOverlay.classList.add('hidden');
             videoPlayer.classList.remove('hidden');
-            if (studioVideoControls) studioVideoControls.classList.remove('hidden');
+
             
             isV2Visible = true;
             isV1Visible = false;
