@@ -289,16 +289,26 @@
         </header>
 
         <div class="studio-workspace">
-            <div class="studio-left">
-                <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-                    <i class="fa-solid fa-database text-teal" style="font-size: 18px; margin-right: 5px;"></i>
-                    <select id="select-studio-cache" class="studio-select" style="flex: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px; border-radius: 4px;">
-                        <option value="">Cargando cachés...</option>
-                    </select>
-                    <button id="btn-studio-load-cache" class="glow-button" style="background: rgba(0, 242, 254, 0.1); border-color: rgba(0, 242, 254, 0.3); color: #00f2fe; white-space: nowrap; padding: 8px 15px;">
-                        <i class="fa-solid fa-folder-open"></i> Cargar Caché
-                    </button>
+            <div class="studio-left" style="position: relative;">
+                
+                <!-- Overlay de carga de caché -->
+                <div id="studio-cache-overlay" class="hidden" style="position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(7, 9, 14, 0.95); z-index: 10; border-radius: 8px;">
+                    <div style="background: rgba(13, 17, 28, 0.8); padding: 40px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); text-align: center; width: 500px; max-width: 90%; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+                        <i class="fa-solid fa-folder-open text-teal" style="font-size: 48px; margin-bottom: 20px;"></i>
+                        <h2 style="margin-bottom: 10px; font-weight: 600;">Cargar Proyecto</h2>
+                        <p class="text-gray" style="margin-bottom: 25px; font-size: 14px;">Selecciona una sesión renderizada para entrar al editor.</p>
+                        
+                        <div style="display: flex; gap: 10px; align-items: stretch;">
+                            <select id="select-studio-cache" class="studio-select" style="flex: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 12px; border-radius: 6px; font-size: 14px; outline: none;">
+                                <option value="">Cargando cachés...</option>
+                            </select>
+                            <button id="btn-studio-load-cache" class="glow-button" style="background: rgba(0, 242, 254, 0.1); border-color: rgba(0, 242, 254, 0.3); color: #00f2fe; padding: 12px 24px; font-weight: 600;">
+                                Comenzar
+                            </button>
+                        </div>
+                    </div>
                 </div>
+
                 <div id="studio-video-wrapper" class="studio-video-wrapper"></div>
             </div>
 

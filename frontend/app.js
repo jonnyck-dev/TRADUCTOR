@@ -761,12 +761,19 @@ document.addEventListener('DOMContentLoaded', () => {
         
         loadStudioCaches(); // Populate the top right dropdown
         
+        const cacheOverlay = document.getElementById('studio-cache-overlay');
+        
         if (currentTaskId) {
+            if (cacheOverlay) cacheOverlay.classList.add('hidden');
+            videoPlayer.classList.remove('hidden');
             loadStudioData();
         } else {
+            if (cacheOverlay) cacheOverlay.classList.remove('hidden');
+            videoPlayer.classList.add('hidden');
+            
             // Reset inspector and wait for user to select a cache
             studioActiveBlock = null;
-            document.getElementById('inspector-block-name').innerHTML = 'Selecciona un caché arriba y luego un bloque de audio en la línea de tiempo...';
+            document.getElementById('inspector-block-name').innerHTML = 'Cargando sesión...';
             document.getElementById('inspector-content').classList.add('hidden');
             
             // Clear timelines
@@ -816,6 +823,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             currentTaskId = selectedCache;
+            const cacheOverlay = document.getElementById('studio-cache-overlay');
+            if (cacheOverlay) cacheOverlay.classList.add('hidden');
+            videoPlayer.classList.remove('hidden');
+            
             videoPlayer.src = `/cache/${currentTaskId}/video_original.mp4`;
             loadStudioData();
         });
