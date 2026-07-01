@@ -89,3 +89,9 @@ Este proyecto es una aplicación web local que automatiza el proceso de traducci
   - Actualizar [frontend/index.html](file:///mnt/g/IA/PROYECTOS/Traductor/frontend/index.html) para renombrar los títulos a **VoxCPM2** y remover los modelos obsoletos de VibeVoice.
   - Actualizar los range sliders y selectores de la interfaz para enviar variables genéricas (`tts_model`, `tts_cfg`, `tts_steps`) al backend.
   - Adaptar [frontend/app.js](file:///mnt/g/IA/PROYECTOS/Traductor/frontend/app.js) para mapear estas nuevas variables al pipeline `/api/process`.
+
+### 5. Migración de Infraestructura (Gestor de Paquetes Moderno) (Pendiente)
+- **Problema**: El proyecto utiliza actualmente `venv` y `pip` tradicionales, lo que causa demoras significativas (5-10 minutos) al instalar entornos pesados para modelos de audio y aumenta el riesgo de "Dependency Hell" (conflictos entre versiones de PyTorch, CUDA y librerías).
+- **Solución**:
+  - **Migrar a `uv` (Astral)**: Reemplazar todas las creaciones de entorno virtual y comandos de instalación en los archivos `.bat` para usar el gestor ultrarrápido en Rust (`uv venv` y `uv pip install`).
+  - Esto nos permitirá usar el caché global mediante hardlinks, reduciendo la instalación de librerías masivas como PyTorch a simples segundos, resolviendo cualquier conflicto de dependencias al instante y mejorando drásticamente los tiempos de actualización del proyecto.

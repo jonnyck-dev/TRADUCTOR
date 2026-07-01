@@ -1,101 +1,141 @@
-# 🎬 AEGIS Audio Editor / AI Video Dubber (v3.0)
+# AEGIS Audio Editor / AI Video Dubber (v3.0)
 
-Este proyecto es una aplicación web local de nivel premium diseñada para **traducir, doblar y editar** videos de YouTube al español de forma automatizada. Combina modelos avanzados de transcripción, traducción local/nube y síntesis de voz, orquestados bajo una arquitectura no lineal que te permite editar audio a nivel de bloque en un Estudio Interactivo profesional.
+Este proyecto es una aplicación web local para **traducir, doblar y editar** videos de YouTube al español de forma automatizada. Combina transcripción (WhisperX), traducción local (Ollama), síntesis de voz (VibeVoice / VoxCPM) y edición no-lineal en un estudio interactivo, orquestado bajo una arquitectura optimizada para Windows/WSL con GPUs NVIDIA.
 
 ---
 
-## 🧠 Arquitectura y Flujo del Pipeline (v3.0)
+## Pipeline
 
-El sistema opera bajo dos modalidades: el modo de Procesamiento en Lote (One-Shot Pipeline) y el modo de Edición Interactiva (Studio Mode).
-
-### 1. El Motor de Pipeline Automatizado
 ```mermaid
 graph TD
-    A[URL YouTube] --> B[Descarga de Medios via yt-dlp]
-    B --> C[Separación de Voces con Demucs htdemucs_ft]
+    A[URL YouTube / Archivo Local] --> B[Descarga: yt-dlp + ffmpeg]
+    B --> C[Separación de Voces: Demucs htdemucs_ft]
     C --> D[Vocals.wav]
     C --> E[Fondo Instrumental]
-    D --> F[Transcripción WhisperX]
-    F --> G[Traducción One-Shot Ollama + Sanador IA]
-    G --> H[Clonación Zero-Shot de Voz original]
-    H --> I[Sintesis VibeVoice Multi-Proceso]
-    I --> J[Caché Idempotente por Bloques]
+    D --> F[Transcripción: WhisperX + alineación de palabras]
+    F --> G[Traducción One-Shot: Ollama + Auto-Corrección JSON]
+    G --> H[Sanador IA: eliminación de alucinaciones + puntuación prosódica]
+    H --> I[Sincronización temporal: ajuste de español a timestamps originales]
+    I --> J[TTS: VibeVoice o VoxCPM]
+    J --> K[Sincronización de pistas: Silence Debt Compensation]
+    K --> L[Mezcla: voz doblada + fondo instrumental]
+    L --> M[Fusión con video: ffmpeg]
+    M --> N[QA: verificación WhisperX + accuracy]
 ```
 
-### Componentes Clave del Motor:
+### Componentes
 
-1. **Separación de Audio (Demucs)**:
-   - Extrae la voz limpia y el fondo musical preservando el diseño de sonido del creador a -1dB.
-2. **Transcripción (WhisperX)**:
-   - Provee transcripción ultra precisa con marcas de tiempo a nivel de palabra mediante alineación forzada.
-3. **El Sanador (Anti-Colapso IA)**:
-   - Una capa automatizada post-traducción que intercepta el guion y elimina alucinaciones de texto antes de enviarlas al TTS, inyectando puntuación teatral (!, ?) para guiar la emoción prosódica de VibeVoice bajo un escudo estructural matemático de índices de tiempo.
-4. **Motor VibeVoice Multi-Proceso**:
-   - Generación distribuida en múltiples procesos independientes (`8001`, `8002`, etc.) según la VRAM disponible, garantizando 0 colisiones en PyTorch y evitando *silencios o repeticiones robóticas*.
-5. **Caché Idempotente Total**: 
-   - El sistema guarda los archivos JSON y Audios de cada etapa. Si detienes la tarea o modificas algo, el sistema omitirá los pasos previos cargando los resultados calculados en 0.001 segundos.
+1. **Separación (Demucs via UVR5-UI)**: Extrae voz y fondo instrumental por separado. Usa el modelo `htdemucs_ft`.
 
----
+2. **Transcripción (WhisperX)**: Reconocimiento de voz con timestamps a nivel de palabra mediante alineación forzada (wav2vec2).
 
-## ✂️ Interactive Studio Editor (NUEVO en v3.0)
+3. **Traducción (Ollama)**: Traducción one-shot con auto-corrección JSON (hasta 5 reintentos). Soporta cualquier modelo local o cloud.
 
-Se ha implementado un Editor No-Lineal Profesional integrado en la web. Tras un procesamiento base, puedes abrir el Estudio y disfrutar de:
-- **Timeline Horizontal Interactivo**: Una línea de tiempo con bloques de colores estilo neón para Video, Audio Original (Inglés) y Audio Doblado (Español).
-- **Procesamiento Aislado por Bloque**: ¿La IA cometió un error fonético en el minuto 45? Selecciona ese bloque en la línea de tiempo, escribe la corrección en el Inspector, y presiona "Regenerar Audio". El servidor regenerará **solo ese archivo mp3 en 5 segundos**, evitando reprocesar todo el video de 1 hora.
-- **Auditoría de Audio en Tiempo Real**: Botones dedicados para escuchar el canal vocal original aislado vs el canal vocal doblado, recortados en milisegundos con `pydub`.
-- **Ensamblaje Instantáneo**: Un botón mágico borra el cache de video para forzar al caché idempotente a reconectar los nuevos audios arreglados de forma instantánea al pulsar Traducir (Caché).
+4. **Sanador IA**: Capa post-traducción que elimina alucinaciones, agrega puntuación prosódica (!, ?) y corrige repeticiones.
+
+5. **Sincronización Temporal**: Ajusta el español traducido a los timestamps originales usando alineación proporcional.
+
+6. **TTS (`VibeVoice` o `VoxCPM`)**: Generación distribuida en servidores paralelos (múltiples puertos) para evitar colisiones de VRAM. Soporta clonación zero-shot de voz.
+
+7. **Mezcla y Fusión**: Combina voz doblada con fondo instrumental a -1dB y ensambla el video final.
 
 ---
 
-## 🛠️ Requisitos e Instalación
+## Interactive Studio Editor (v3.0)
 
-### Requisitos Previos (Windows Host / WSL)
-- Python 3.10 o superior.
-- **FFmpeg** instalado.
-- **Ollama** instalado y corriendo localmente (puerto `11434`).
-- **NVIDIA GPU** con capacidad para procesos paralelos PyTorch.
+Editor no-lineal integrado en la web para corrección quirúrgica post-procesamiento:
 
-### Configuración del Entorno
+- **Timeline horizontal**: Bloques de colores para Video, Audio Original (inglés) y Audio Doblado (español).
+- **Regeneración por bloque**: Seleccioná un bloque, corregí el texto en el Inspector y regenerá solo ese MP3 (~5s).
+- **Auditoría en tiempo real**: Escuchá el canal vocal original aislado vs el doblado.
+- **Ensamblaje instantáneo**: Reconstruye el video final con los bloques corregidos sin reprocesar todo.
 
-1. **Clonar el repositorio**:
+---
+
+## Requisitos
+
+### Sistema
+- Python 3.10+
+- FFmpeg (en PATH o ruta personalizada en `audio_processor.py`)
+- Ollama corriendo localmente (puerto `11434`)
+- GPU NVIDIA con CUDA (probado en RTX 5070, CUDA 12.8)
+- Windows (nativo) o WSL con Ubuntu
+
+### Dependencias Python
+```
+fastapi==0.111.0
+uvicorn==0.30.1
+yt-dlp>=2026.6.9
+pydub==0.25.1
+requests==2.32.3
+```
+
+---
+
+## Instalación
+
+1. **Clonar**:
    ```bash
    git clone https://github.com/jonnyck-dev/TRADUCTOR.git
    cd TRADUCTOR
    ```
 
-2. **Crear enlaces simbólicos (Windows)**:
-   Abre cmd como Administrador:
-   ```cmd
-   setup_symlinks.bat
-   ```
-
-3. **Instalar dependencias**:
+2. **Instalar dependencias**:
    ```cmd
    setup_env.bat
    ```
 
+3. **TTS servers**: Tener clonados VibeVoice y/o VoxCPM accesibles localmente con sus entornos Python activos.
+
 ---
 
-## 🚀 Cómo Iniciar el Proyecto
+## Inicio
 
-### En Windows
-Haz doble clic en `run.bat` o desde terminal:
+### Windows
 ```cmd
 run.bat
 ```
 
-### En WSL / Linux
+### WSL / Linux
 ```bash
 ./run.sh
 ```
 
-El servidor web premium estará disponible en: **👉 [http://localhost:8000](http://localhost:8000)**
+Servidor en **http://localhost:8000**
 
 ---
 
-## 🎨 Características de la Interfaz Web (Glassmorphism UI)
+## API Endpoints
 
-- **Diseño Premium v3.0**: Interfaz oscura `Dark Mode` con acentos de color neón interactivos.
-- **Web-Streaming Integrado (HTTP 206 Partial Content)**: El motor de FastAPI soporta carga dinámica de video, permitiendo adelantar y retrasar la barra del reproductor multimedia en tu navegador libremente sin recargar el caché.
-- **Timers y Análisis de Rendimiento**: Un panel visual detalla los segundos y el porcentaje invertido por tu GPU/CPU en cada paso del proceso (Descarga, Demucs, WhisperX, Traducción, TTS).
-- **Selector Inteligente de Modelos Ollama**: Agrupa visualmente modelos en tiempo real.
+| Endpoint | Método | Descripción |
+|----------|--------|-------------|
+| `/api/upload` | POST | Subir video local (.mp4) |
+| `/api/process` | POST | Iniciar procesamiento (URL o caché) |
+| `/api/cancel/{id}` | POST | Cancelar tarea |
+| `/api/status/{id}` | GET | Estado y progreso de tarea |
+| `/api/models` | GET | Listar modelos Ollama disponibles |
+| `/api/stream/{id}` | GET | Video doblado (HTTP 206 Partial Content) |
+| `/api/caches` | GET | Listar tareas cacheadas |
+| `/api/studio/{id}/data` | GET | Datos del estudio interactivo |
+| `/api/studio/{id}/reprocess` | POST | Regenerar bloque del estudio |
+| `/api/studio/{id}/finalize` | POST | Ensamblar video final |
+
+---
+
+## Interfaz Web
+
+- Diseño glassmorphism oscuro con acentos neón
+- Reproductor con subtítulos sincronizados (inglés/español)
+- Panel de timers con barras de progreso por etapa
+- Selector inteligente de modelos Ollama
+- Simulador de caché para depuración
+- Studio Editor con timeline interactivo
+
+---
+
+## Notas técnicas
+
+- **VRAM**: Los servidores TTS se levantan y destruyen dinámicamente para liberar memoria.
+- **WSL**: El backend detecta `os.name` y usa `wsl_to_windows_path()` o rutas nativas según corresponda.
+- **Caché idempotente**: Cada etapa guarda resultados en `cache/{task_id}/`; si se interrumpe, retoma desde el último paso completo.
+- **FFmpeg**: Ruta hardcodeada `C:\Users\jpzam\Downloads\audioconverter\bin\ffmpeg.exe` en Windows; `ffmpeg` en PATH en WSL/Linux.
