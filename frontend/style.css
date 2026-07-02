@@ -1028,6 +1028,18 @@ video {
     border-color: #fff;
 }
 
+.dubbed-block.range-selected {
+    background: rgba(255, 165, 0, 0.25);
+    border-color: rgba(255, 165, 0, 0.7);
+    box-shadow: 0 0 12px rgba(255, 165, 0, 0.4);
+    animation: range-pulse 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes range-pulse {
+    0% { box-shadow: 0 0 8px rgba(255, 165, 0, 0.3); }
+    100% { box-shadow: 0 0 18px rgba(255, 165, 0, 0.6); }
+}
+
 .english-block {
     background: rgba(157, 78, 221, 0.15);
     border-color: rgba(157, 78, 221, 0.4);

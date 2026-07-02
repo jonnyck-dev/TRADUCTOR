@@ -758,6 +758,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let studioActiveBlock = null;
     let studioData = null;
     const PIXELS_PER_SECOND = 40;
+    
+    // Range selection state for gap re-transcription
+    let rangeStartPhrase = null;
+    let rangeEndPhrase = null;
+    const rangeSelectionPanel = document.getElementById('range-selection-panel');
+    const rangeInfo = document.getElementById('range-info');
+    const rangeGapInfo = document.getElementById('range-gap-info');
+    const btnRetranscribe = document.getElementById('btn-studio-retranscribe');
+    const btnClearRange = document.getElementById('btn-clear-range');
 
     // Show Studio Button when task finishes
     function revealStudioButton() {
@@ -1058,16 +1067,62 @@ document.addEventListener('DOMContentLoaded', () => {
             dubBlock.style.width = `${Math.max(width, 30)}px`;
             dubBlock.innerHTML = `<div class="waveform-bg"></div><span style="position:relative; z-index:1;">${phrase.text}</span>`;
             
-            dubBlock.addEventListener('click', () => {
-                document.querySelectorAll('.dubbed-block').forEach(b => b.classList.remove('selected'));
-                dubBlock.classList.add('selected');
-                
-                selectStudioBlock(phrase);
-                videoPlayer.currentTime = phrase.start_time;
+            dubBlock.addEventListener('click', (e) => {
+                if (e.shiftKey && studioActiveBlock) {
+                    // Shift+Click = select range end
+                    const startIdx = studioActiveBlock.phrase_index;
+                    const endIdx = phrase.phrase_index;
+                    
+                    if (startIdx === endIdx) return;
+                    
+                    // Ensure start < end
+                    if (startIdx < endIdx) {
+                        rangeStartPhrase = studioData.find(p => p.phrase_index === startIdx);
+                        rangeEndPhrase = phrase;
+                    } else {
+                        rangeStartPhrase = phrase;
+                        rangeEndPhrase = studioData.find(p => p.phrase_index === startIdx);
+                    }
+                    
+                    // Highlight range
+                    document.querySelectorAll('.dubbed-block').forEach(b => b.classList.remove('selected', 'range-selected'));
+                    const allDubBlocks = document.querySelectorAll('.dubbed-block');
+                    const minIdx = rangeStartPhrase.phrase_index;
+                    const maxIdx = rangeEndPhrase.phrase_index;
+                    allDubBlocks.forEach((b, i) => {
+                        const phraseForBlock = studioData[i];
+                        if (phraseForBlock && phraseForBlock.phrase_index >= minIdx && phraseForBlock.phrase_index <= maxIdx) {
+                            b.classList.add('range-selected');
+                        }
+                    });
+                    
+                    // Show range panel
+                    const gapDuration = rangeEndPhrase.start_time - rangeStartPhrase.end_time;
+                    rangeInfo.innerHTML = `<i class="fa-solid fa-arrow-right"></i> Frase #${rangeStartPhrase.phrase_index} [${formatTime(rangeStartPhrase.end_time)}] → Frase #${rangeEndPhrase.phrase_index} [${formatTime(rangeEndPhrase.start_time)}]`;
+                    rangeGapInfo.textContent = `Gap: ${gapDuration.toFixed(2)}s de audio sin transcribir`;
+                    if (rangeSelectionPanel) rangeSelectionPanel.classList.remove('hidden');
+                    inspectorBlockName.innerHTML = `<i class="fa-solid fa-arrows-left-right-to-line" style="color: #ffa500;"></i> Rango: Frase #${rangeStartPhrase.phrase_index} → #${rangeEndPhrase.phrase_index}`;
+                    
+                } else {
+                    // Normal click = select single block
+                    clearRangeSelection();
+                    document.querySelectorAll('.dubbed-block').forEach(b => b.classList.remove('selected', 'range-selected'));
+                    dubBlock.classList.add('selected');
+                    
+                    selectStudioBlock(phrase);
+                    videoPlayer.currentTime = phrase.start_time;
+                }
             });
             
             trackDubbed.appendChild(dubBlock);
         });
+    }
+    
+    function clearRangeSelection() {
+        rangeStartPhrase = null;
+        rangeEndPhrase = null;
+        document.querySelectorAll('.dubbed-block').forEach(b => b.classList.remove('range-selected'));
+        if (rangeSelectionPanel) rangeSelectionPanel.classList.add('hidden');
     }
 
     function selectStudioBlock(phrase) {
@@ -1157,5 +1212,65 @@ document.addEventListener('DOMContentLoaded', () => {
             .catch(err => alert('Error finalizing: ' + err));
         }
     });
+
+    // Range selection: Clear button
+    if (btnClearRange) {
+        btnClearRange.addEventListener('click', () => {
+            clearRangeSelection();
+            inspectorBlockName.innerHTML = '<i class="fa-solid fa-cube text-gray"></i> Selecciona un bloque de audio en la línea de tiempo inferior...';
+        });
+    }
+
+    // Range selection: Re-transcribe button
+    if (btnRetranscribe) {
+        btnRetranscribe.addEventListener('click', () => {
+            if (!rangeStartPhrase || !rangeEndPhrase || !currentTaskId) {
+                alert('Selecciona un rango primero (Click en una frase, luego Shift+Click en otra).');
+                return;
+            }
+            
+            const gapDuration = rangeEndPhrase.start_time - rangeStartPhrase.end_time;
+            if (gapDuration < 0.3) {
+                alert(`El gap entre las frases es muy pequeño (${gapDuration.toFixed(2)}s). No hay suficiente audio para re-transcribir.`);
+                return;
+            }
+            
+            btnRetranscribe.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> WhisperX analizando gap...';
+            btnRetranscribe.disabled = true;
+            
+            fetch(`/api/studio/${currentTaskId}/retranscribe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    start_phrase_index: rangeStartPhrase.phrase_index,
+                    end_phrase_index: rangeEndPhrase.phrase_index
+                })
+            })
+            .then(res => {
+                if (!res.ok) return res.json().then(e => { throw new Error(e.detail || 'Error del servidor'); });
+                return res.json();
+            })
+            .then(data => {
+                console.log('[Studio] Retranscribe result:', data);
+                const newCount = data.new_phrases ? data.new_phrases.length : 0;
+                btnRetranscribe.innerHTML = `<i class="fa-solid fa-check"></i> ¡${newCount} frase(s) encontrada(s)!`;
+                
+                // Clear range and reload timeline
+                clearRangeSelection();
+                loadStudioData();
+                
+                setTimeout(() => {
+                    btnRetranscribe.innerHTML = '<i class="fa-solid fa-magnifying-glass-plus"></i> Re-transcribir Gap con WhisperX';
+                    btnRetranscribe.disabled = false;
+                }, 3000);
+            })
+            .catch(err => {
+                console.error('[Studio] Retranscribe error:', err);
+                alert('Error re-transcribiendo: ' + err.message);
+                btnRetranscribe.innerHTML = '<i class="fa-solid fa-magnifying-glass-plus"></i> Re-transcribir Gap con WhisperX';
+                btnRetranscribe.disabled = false;
+            });
+        });
+    }
 
 });

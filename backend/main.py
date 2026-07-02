@@ -1190,6 +1190,172 @@ def reprocess_studio_block(task_id: str, req: ReprocessRequest):
             
     return {"status": "ok", "message": f"Phrase {req.phrase_index} regenerated successfully."}
 
+class RetranscribeRequest(BaseModel):
+    start_phrase_index: int
+    end_phrase_index: int
+
+@app.post("/api/studio/{task_id}/retranscribe")
+def retranscribe_studio_gap(task_id: str, req: RetranscribeRequest):
+    """
+    Extracts the audio between start_phrase_index and end_phrase_index,
+    transcribes it with WhisperX, and inserts the new phrases back into the JSON script.
+    It then re-indexes all remaining phrase_N.mp3 audio files to match their new offsets.
+    """
+    from audio_processor import get_flat_timestamp
+    from whisper_client import transcribe_audio
+    import subprocess
+    import shutil
+    import json
+    
+    enhanced_json = get_latest_script_path(task_id)
+    if not enhanced_json:
+        raise HTTPException(status_code=404, detail="Cache script not found")
+        
+    with open(enhanced_json, "r", encoding="utf-8") as f:
+        data = json.load(f)
+        
+    chunks = data.get("chunks", [])
+    if not chunks:
+        raise HTTPException(status_code=400, detail="JSON script is empty or has no chunks")
+        
+    if req.start_phrase_index < 0 or req.end_phrase_index >= len(chunks) or req.start_phrase_index >= req.end_phrase_index:
+        raise HTTPException(status_code=400, detail="Invalid phrase indices or range")
+        
+    chunk_a = chunks[req.start_phrase_index]
+    chunk_b = chunks[req.end_phrase_index]
+    
+    ts_a = get_flat_timestamp(chunk_a.get("timestamp", [0.0, 0.0]))
+    ts_b = get_flat_timestamp(chunk_b.get("timestamp", [0.0, 0.0]))
+    
+    gap_start = ts_a[1] # End of first phrase
+    gap_end = ts_b[0] # Start of second phrase
+    
+    if gap_end - gap_start < 0.3:
+        raise HTTPException(status_code=400, detail=f"Gap is too small ({gap_end - gap_start:.2f}s). No audio to transcribe.")
+        
+    # Check audio source path (default to vocals, fallback to downloads/video.mp4 audio extraction)
+    vocals_path = os.path.join(CACHE_DIR, task_id, "demucs", "htdemucs", "audio", "vocals.wav")
+    if not os.path.exists(vocals_path):
+        vocals_path = os.path.join(CACHE_DIR, task_id, "downloads", "audio.wav")
+        
+    if not os.path.exists(vocals_path):
+        # Maybe we only have downloads/video.mp4. Let's try to extract audio
+        video_path = os.path.join(CACHE_DIR, task_id, "downloads", "video.mp4")
+        if os.path.exists(video_path):
+            audio_dir = os.path.dirname(vocals_path)
+            os.makedirs(audio_dir, exist_ok=True)
+            # Extract audio to a temporary wav
+            cmd = ["ffmpeg", "-y", "-i", video_path, "-vn", "-acodec", "pcm_s16le", "-ar", "24000", "-ac", "1", vocals_path]
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+    if not os.path.exists(vocals_path):
+        raise HTTPException(status_code=404, detail="Original audio source not found in cache folder")
+        
+    # Slice the gap audio
+    gap_audio_path = os.path.join(CACHE_DIR, task_id, "whisper", "gap_audio.wav")
+    gap_json_path = os.path.join(CACHE_DIR, task_id, "whisper", "gap_transcript.json")
+    
+    # Slice with transcoding to avoid bad headers
+    ffmpeg_cmd = ["ffmpeg", "-y", "-i", vocals_path, "-ss", str(gap_start), "-to", str(gap_end), "-acodec", "pcm_s16le", gap_audio_path]
+    subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    
+    if not os.path.exists(gap_audio_path):
+        raise HTTPException(status_code=500, detail="Failed to slice gap audio using ffmpeg")
+        
+    # Transcribe sliced audio
+    try:
+        # Transcribe original (English) gap audio
+        transcript_res = transcribe_audio(gap_audio_path, gap_json_path, language="English")
+        new_chunks = transcript_res.get("chunks", [])
+    except Exception as e:
+        if os.path.exists(gap_audio_path):
+            os.remove(gap_audio_path)
+        raise HTTPException(status_code=500, detail=f"WhisperX transcription failed: {e}")
+        
+    # Clean up gap files
+    if os.path.exists(gap_audio_path):
+        os.remove(gap_audio_path)
+    if os.path.exists(gap_json_path):
+        os.remove(gap_json_path)
+        
+    # If no phrases were found
+    if not new_chunks:
+        return {"status": "ok", "new_phrases": [], "message": "No additional speech detected in the selected gap range."}
+        
+    # Adjust timestamps in the new chunks by adding gap_start offset
+    adjusted_chunks = []
+    for chunk in new_chunks:
+        orig_ts = chunk.get("timestamp", [0.0, 0.0])
+        c_start = orig_ts[0] + gap_start
+        c_end = orig_ts[1] + gap_start
+        
+        words = chunk.get("words", [])
+        adjusted_words = []
+        for w in words:
+            if "start" in w:
+                w["start"] += gap_start
+            if "end" in w:
+                w["end"] += gap_start
+            adjusted_words.append(w)
+            
+        adjusted_chunks.append({
+            "text": chunk.get("text", "").strip(),
+            "timestamp": [c_start, c_end],
+            "words": adjusted_words
+        })
+        
+    # Insert new chunks into chunks array right after start_phrase_index
+    num_new = len(adjusted_chunks)
+    insert_pos = req.start_phrase_index + 1
+    
+    data["chunks"] = chunks[:insert_pos] + adjusted_chunks + chunks[insert_pos:]
+    
+    # Re-indexing all phrase_N.mp3 / phrase_N.wav files in the tts directory
+    tts_dir = os.path.join(CACHE_DIR, task_id, "tts")
+    if os.path.exists(tts_dir):
+        existing_indices = []
+        for f in os.listdir(tts_dir):
+            if f.startswith("phrase_") and (f.endswith(".mp3") or f.endswith(".wav")):
+                try:
+                    parts = f.split("_")
+                    idx = int(parts[1].split(".")[0])
+                    ext = "." + parts[1].split(".")[1]
+                    existing_indices.append((idx, ext, f))
+                except:
+                    pass
+                    
+        # Sort in descending order to avoid overwriting files when renaming
+        existing_indices.sort(key=lambda x: x[0], reverse=True)
+        
+        # Move them to a temporary name first to be collision free
+        temp_renames = []
+        for idx, ext, f in existing_indices:
+            if idx >= insert_pos:
+                old_path = os.path.join(tts_dir, f)
+                temp_name = f"temp_phrase_{idx}{ext}"
+                temp_path = os.path.join(tts_dir, temp_name)
+                if os.path.exists(old_path):
+                    shutil.move(old_path, temp_path)
+                temp_renames.append((idx, ext, temp_name))
+                
+        # Now rename temp files to their final index (idx + num_new)
+        for idx, ext, temp_name in temp_renames:
+            temp_path = os.path.join(tts_dir, temp_name)
+            new_name = f"phrase_{idx + num_new}{ext}"
+            new_path = os.path.join(tts_dir, new_name)
+            if os.path.exists(temp_path):
+                shutil.move(temp_path, new_path)
+                
+    # Save the updated JSON script
+    with open(enhanced_json, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        
+    return {
+        "status": "ok",
+        "new_phrases": adjusted_chunks,
+        "total_phrases": len(data["chunks"])
+    }
+
 @app.post("/api/studio/{task_id}/finalize")
 def finalize_studio_video(task_id: str):
     """Prepares the project for final assembly by clearing the old video outputs."""

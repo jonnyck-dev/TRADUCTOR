@@ -354,6 +354,25 @@
                             <i class="fa-solid fa-rotate"></i> Regenerate Audio (5s)
                         </button>
                     </div>
+
+                    <!-- Range Selection Section (appears on Shift+Click) -->
+                    <div id="range-selection-panel" class="hidden" style="margin-top: 20px; padding: 15px; background: rgba(255, 165, 0, 0.08); border: 1px solid rgba(255, 165, 0, 0.3); border-radius: 8px;">
+                        <h4 style="color: #ffa500; margin: 0 0 10px 0; font-size: 13px;">
+                            <i class="fa-solid fa-arrows-left-right-to-line"></i> RANGO SELECCIONADO
+                        </h4>
+                        <p id="range-info" class="text-gray" style="font-size: 12px; margin-bottom: 10px;">
+                            Frase #? → Frase #?
+                        </p>
+                        <p id="range-gap-info" style="font-size: 11px; color: rgba(255,165,0,0.7); margin-bottom: 12px;">
+                            Gap: 0.00s de audio sin transcribir
+                        </p>
+                        <button id="btn-studio-retranscribe" class="glow-button" style="width: 100%; background: rgba(255, 165, 0, 0.15); border-color: rgba(255, 165, 0, 0.5); color: #ffa500; font-weight: 600;">
+                            <i class="fa-solid fa-magnifying-glass-plus"></i> Re-transcribir Gap con WhisperX
+                        </button>
+                        <button id="btn-clear-range" class="glow-button" style="width: 100%; margin-top: 8px; background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.1); color: rgba(255,255,255,0.5); font-size: 11px;">
+                            <i class="fa-solid fa-xmark"></i> Limpiar selección
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

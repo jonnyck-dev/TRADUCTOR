@@ -127,3 +127,24 @@ Este proyecto es una aplicación web local que automatiza el proceso de traducci
 - **Solución (Fase Servidor/Nube - A Futuro)**:
   - Crear un microservicio residente `demucs_server.py` que mantenga los tensores del modelo precargados en la VRAM de la GPU permanentemente.
   - Esto reducirá la latencia de inicio de separación a **0 milisegundos**, siendo el estándar de la industria para despliegues escalables donde la VRAM no es un cuello de botella compartido.
+
+---
+
+## 🎬 Studio Editor: Re-transcripción de Gaps (Implementado)
+
+### Problema
+WhisperX puede omitir segmentos de audio (gaps) durante la transcripción inicial, dejando huecos de ~10+ segundos donde el hablante dice algo pero no aparece texto en la timeline.
+
+### Solución
+- **Selección de rango** con Shift+Click en dos bloques de la timeline (frase A y frase B).
+- **Botón "Re-transcribir rango"** en el Inspector que extrae el audio del gap y lo pasa por WhisperX.
+- Las frases nuevas se **insertan** entre las existentes, re-indexando automáticamente los `phrase_N.mp3`.
+
+### Endpoint
+`POST /api/studio/{task_id}/retranscribe` con `{ start_phrase_index, end_phrase_index }`.
+
+### Archivos modificados
+- `backend/main.py` — Nuevo endpoint
+- `frontend/app.js` — Lógica Shift+Click + API
+- `frontend/index.html` — Botón en Inspector
+- `frontend/style.css` — Estilos de selección de rango
