@@ -11,6 +11,13 @@ from pydantic import BaseModel
 from pydub import AudioSegment
 import yt_dlp
 
+# Load environment configuration
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend", ".env"))
+except ImportError:
+    pass
+
 # Import our modular clients
 from whisper_client import transcribe_audio
 from translator import translate_chunks
@@ -46,9 +53,9 @@ class ProcessRequest(BaseModel):
     url: str
     model: str = "gemma4:e2b-it-qat"
     speaker: str = "en-Frank_man"
-    vibevoice_model: str = "openbmb/VoxCPM2"
-    vibevoice_cfg: float = 2.0
-    vibevoice_steps: int = 10
+    tts_model: str = "openbmb/VoxCPM2"
+    tts_cfg: float = 2.0
+    tts_steps: int = 10
     tts_mode: str = "sentence"
     batch_size: int = 15
     sync_size: int = 5
@@ -390,7 +397,7 @@ def prepare_cloned_voice(audio_path: str, whisper_json_path: str):
         print(f"Error al preparar la voz clonada: {e}")
         traceback.print_exc()
 
-def process_translation_task(task_id: str, url: str, model: str, speaker: str, vibevoice_model: str = None, vibevoice_cfg: float = 2.0, vibevoice_steps: int = 10, tts_mode: str = "sentence", batch_size: int = 15, sync_size: int = 5):
+def process_translation_task(task_id: str, url: str, model: str, speaker: str, tts_model: str = None, tts_cfg: float = 2.0, tts_steps: int = 10, tts_mode: str = "sentence", batch_size: int = 15, sync_size: int = 5):
     import time
     start_task_time = time.time()
     step_times = {}
@@ -602,9 +609,9 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, v
             tts_dir, 
             speaker_name=speaker, 
             task_id=task_id,
-            vibevoice_model=vibevoice_model,
-            vibevoice_cfg=vibevoice_cfg,
-            vibevoice_steps=vibevoice_steps
+             tts_model=tts_model,
+            tts_cfg=tts_cfg,
+            tts_steps=tts_steps
         )
         step_times["4_tts_synthesis"] = time.time() - t0
         
@@ -834,8 +841,22 @@ async def upload_local_video(file: UploadFile = File(...)):
 
 @app.post("/api/process")
 def process_video(request: ProcessRequest, background_tasks: BackgroundTasks):
+    import json
     if request.url.startswith("cache:"):
-        task_id = request.url.split(":")[1]
+        task_id = request.url.split(":")[1].strip()
+        
+        # Load previous render state to prevent accidental chunking re-calculation
+        render_state_path = os.path.join(CACHE_DIR, task_id, "tts", "render_state.json")
+        if os.path.exists(render_state_path):
+            try:
+                with open(render_state_path, "r", encoding="utf-8") as f:
+                    state = json.load(f)
+                    # Force request to inherit original layout parameters so it doesn't wipe cache
+                    request.batch_size = state.get("batch_size", request.batch_size)
+                    request.sync_size = state.get("sync_size", request.sync_size)
+                    request.tts_mode = state.get("tts_mode", request.tts_mode)
+            except:
+                pass
     else:
         task_id = str(uuid.uuid4())
         
@@ -852,9 +873,9 @@ def process_video(request: ProcessRequest, background_tasks: BackgroundTasks):
         request.url,
         request.model,
         request.speaker,
-        request.vibevoice_model,
-        request.vibevoice_cfg,
-        request.vibevoice_steps,
+        request.tts_model,
+        request.tts_cfg,
+        request.tts_steps,
         request.tts_mode,
         request.batch_size,
         request.sync_size
@@ -905,18 +926,8 @@ def get_ollama_models():
     except Exception as e:
         print(f"Ollama list execution failed: {e}")
         
-    # 3. Static fallback
-    return {
-        "status": "fallback",
-        "models": [
-            "gemma4:e2b-it-qat",
-            "llama3.2:3b",
-            "qwen3.5:2b",
-            "deepseek-v4-pro:cloud",
-            "deepseek-v4-flash:cloud",
-            "nemotron-3-nano:30b-cloud"
-        ]
-    }
+    # 3. No Ollama available — return empty list
+    return {"status": "offline", "models": []}
 
 import re
 from fastapi import Request
@@ -1042,9 +1053,9 @@ class ReprocessRequest(BaseModel):
     phrase_index: int
     text: str
     speaker: str
-    vibevoice_model: str
-    vibevoice_cfg: float
-    vibevoice_steps: int
+    tts_model: str
+    tts_cfg: float
+    tts_steps: int
 
 def get_latest_script_path(task_id: str):
     whisper_dir = os.path.join(CACHE_DIR, task_id, "whisper")
@@ -1167,9 +1178,9 @@ def reprocess_studio_block(task_id: str, req: ReprocessRequest):
             tts_dir=temp_tts_dir,
             speaker_name=req.speaker,
             task_id=task_id,
-            vibevoice_model=req.vibevoice_model,
-            vibevoice_cfg=req.vibevoice_cfg,
-            vibevoice_steps=req.vibevoice_steps
+            tts_model=req.tts_model,
+            tts_cfg=req.tts_cfg,
+            tts_steps=req.tts_steps
         )
         
         if not generated_paths or not os.path.exists(generated_paths[0]):
@@ -1346,6 +1357,10 @@ def retranscribe_studio_gap(task_id: str, req: RetranscribeRequest):
             if os.path.exists(temp_path):
                 shutil.move(temp_path, new_path)
                 
+    # Ensure phrase_index properties match array indices before saving
+    for i, c in enumerate(data.get("chunks", [])):
+        c["phrase_index"] = i
+        
     # Save the updated JSON script
     with open(enhanced_json, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -1353,6 +1368,83 @@ def retranscribe_studio_gap(task_id: str, req: RetranscribeRequest):
     return {
         "status": "ok",
         "new_phrases": adjusted_chunks,
+        "total_phrases": len(data["chunks"])
+    }
+
+@app.post("/api/studio/{task_id}/delete/{phrase_index}")
+def delete_studio_phrase(task_id: str, phrase_index: int):
+    """
+    Deletes the phrase at the specified index, shifts all subsequent phrase_N.mp3 / wav files,
+    and updates the JSON script.
+    """
+    import shutil
+    import json
+    
+    enhanced_json = get_latest_script_path(task_id)
+    if not enhanced_json:
+        raise HTTPException(status_code=404, detail="Cache script not found")
+        
+    with open(enhanced_json, "r", encoding="utf-8") as f:
+        data = json.load(f)
+        
+    chunks = data.get("chunks", [])
+    if not chunks:
+        raise HTTPException(status_code=400, detail="JSON script has no chunks")
+        
+    if phrase_index < 0 or phrase_index >= len(chunks):
+        raise HTTPException(status_code=400, detail="Invalid phrase index")
+        
+    # Delete the chunk
+    chunks.pop(phrase_index)
+    
+    # Update the chunks in data
+    data["chunks"] = chunks
+    
+    # Re-indexing all phrase_N.mp3 / phrase_N.wav files in the tts directory
+    tts_dir = os.path.join(CACHE_DIR, task_id, "tts")
+    if os.path.exists(tts_dir):
+        # Delete files matching this index
+        for ext in [".mp3", ".wav"]:
+            p_file = os.path.join(tts_dir, f"phrase_{phrase_index}{ext}")
+            if os.path.exists(p_file):
+                os.remove(p_file)
+            ref_file = os.path.join(tts_dir, f"ref_{phrase_index}{ext}")
+            if os.path.exists(ref_file):
+                os.remove(ref_file)
+                
+        existing_indices = []
+        for f in os.listdir(tts_dir):
+            if (f.startswith("phrase_") or f.startswith("ref_")) and (f.endswith(".mp3") or f.endswith(".wav")):
+                try:
+                    parts = f.split("_")
+                    idx = int(parts[1].split(".")[0])
+                    ext = "." + parts[1].split(".")[1]
+                    prefix = parts[0] + "_" # "phrase_" or "ref_"
+                    existing_indices.append((idx, ext, prefix, f))
+                except:
+                    pass
+                    
+        # Sort in ascending order to move them down sequentially without collision
+        existing_indices.sort(key=lambda x: x[0])
+        
+        for idx, ext, prefix, f in existing_indices:
+            if idx > phrase_index:
+                old_path = os.path.join(tts_dir, f)
+                new_name = f"{prefix}{idx - 1}{ext}"
+                new_path = os.path.join(tts_dir, new_name)
+                if os.path.exists(old_path):
+                    shutil.move(old_path, new_path)
+                    
+    # Ensure phrase_index properties match array indices before saving
+    for i, c in enumerate(data.get("chunks", [])):
+        c["phrase_index"] = i
+        
+    # Save the updated JSON script
+    with open(enhanced_json, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        
+    return {
+        "status": "ok",
         "total_phrases": len(data["chunks"])
     }
 

@@ -61,8 +61,12 @@ def transcribe_audio(audio_path: str, output_json_path: str, language: str = "En
         win_output_dir = wsl_to_windows_path(os.path.dirname(output_json_path))
         os.makedirs(os.path.dirname(output_json_path), exist_ok=True)
         
+        win_vibevoice_dir = wsl_to_windows_path(vibevoice_dir)
+        activate_bat = os.path.join(vibevoice_dir, "env_vibevoice", "Scripts", "activate.bat")
+        win_activate = wsl_to_windows_path(activate_bat)
+        
         cmd = (
-            f'cmd.exe /c "C:\\users\\jpzam\\Vibevoice\\env_vibevoice\\Scripts\\activate.bat && '
+            f'cmd.exe /c "set VIRTUAL_ENV=&\"{win_activate}\"&& '
             f'whisperx \\"{win_audio_path}\\" --model {model_arg} --language {lang_code} '
             f'--output_dir \\"{win_output_dir}\\" --output_format json --device cuda --compute_type float16" < /dev/null'
         )

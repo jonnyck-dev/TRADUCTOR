@@ -147,11 +147,21 @@
                     
                     <div class="control-group">
                         <label for="select-model">Modelo de Traducción (Ollama)</label>
-                        <div class="select-wrapper">
-                            <select id="select-model">
-                                <option value="">(Cargando modelos de Ollama...)</option>
-                            </select>
-                            <i class="fa-solid fa-chevron-down dropdown-icon"></i>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <div class="select-wrapper" style="flex: 1;">
+                                <select id="select-model">
+                                    <option value="">(Cargando modelos...)</option>
+                                </select>
+                                <i class="fa-solid fa-chevron-down dropdown-icon"></i>
+                            </div>
+                            <button id="btn-reload-models" class="glow-button" style="padding: 8px 10px; font-size: 14px; min-width: auto;" title="Recargar modelos de Ollama">
+                                <i class="fa-solid fa-rotate"></i>
+                            </button>
+                        </div>
+                        <div id="ollama-status" style="font-size: 11px; color: #ff6b6b; margin-top: 4px; display: none;">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Ollama no detectado. Inícialo y presiona Recargar.
+                        </div>
+                    </div>
                         </div>
                     </div>
 
@@ -178,9 +188,9 @@
                     </div>
 
                     <div class="control-group">
-                        <label for="select-vibevoice-model">Modelo de Síntesis (TTS)</label>
+                        <label for="select-tts-model">Modelo de Síntesis (TTS)</label>
                         <div class="select-wrapper">
-                            <select id="select-vibevoice-model">
+                            <select id="select-tts-model">
                                 <option value="openbmb/VoxCPM2" selected>VoxCPM2 (Hifi - 2.0B)</option>
                                 <option value="VibeVoice-1.5B">VibeVoice 1.5B (Standard)</option>
                                 <option value="VibeVoice-Realtime-0.5B">VibeVoice 0.5B (Streaming)</option>
@@ -217,19 +227,19 @@
                     </div>
 
                     <div class="control-group">
-                        <label for="input-vibevoice-cfg" class="flex justify-between">
-                            <span>Escala CFG (TTS)</span>
-                            <span id="val-vibevoice-cfg" class="badge">2.0</span>
+                        <label for="input-tts-cfg" class="flex justify-between">
+                            <span>Factor CFG (Calidad)</span>
+                            <span id="val-tts-cfg" class="badge">2.0</span>
                         </label>
-                        <input type="range" id="input-vibevoice-cfg" min="1.0" max="3.0" step="0.1" value="2.0" style="width: 100%; margin-top: 8px;">
+                        <input type="range" id="input-tts-cfg" min="1.0" max="3.0" step="0.1" value="2.0" style="width: 100%; margin-top: 8px;">
                     </div>
 
                     <div class="control-group">
-                        <label for="input-vibevoice-steps" class="flex justify-between">
-                            <span>Pasos de Inferencia (Steps)</span>
-                            <span id="val-vibevoice-steps" class="badge">10</span>
+                        <label for="input-tts-steps" class="flex justify-between">
+                            <span>Pasos de Inferencia (Velocidad)</span>
+                            <span id="val-tts-steps" class="badge">10</span>
                         </label>
-                        <input type="range" id="input-vibevoice-steps" min="5" max="50" step="1" value="10" style="width: 100%; margin-top: 8px;">
+                        <input type="range" id="input-tts-steps" min="5" max="50" step="1" value="10" style="width: 100%; margin-top: 8px;">
                     </div>
                 </div>
 
@@ -352,6 +362,9 @@
 
                         <button id="btn-studio-regenerate" class="glow-button regenerate-btn" style="width: 100%; margin-top: 15px; background: linear-gradient(135deg, rgba(157, 78, 221, 0.6) 0%, rgba(0, 242, 254, 0.4) 100%);">
                             <i class="fa-solid fa-rotate"></i> Regenerate Audio (5s)
+                        </button>
+                        <button id="btn-studio-delete" class="glow-button delete-btn" style="width: 100%; margin-top: 10px; background: rgba(255, 77, 77, 0.15); border-color: rgba(255, 77, 77, 0.5); color: #ff4d4d; font-weight: 600;">
+                            <i class="fa-solid fa-trash"></i> Eliminar Frase
                         </button>
                     </div>
 

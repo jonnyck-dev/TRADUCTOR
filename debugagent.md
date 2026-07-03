@@ -9,18 +9,18 @@ Hola. Eres el Agente de Debugging especializado en este proyecto. Tu objetivo pr
 El proyecto es una aplicación web local de traducción y doblaje automático de video. Funciona mediante un backend en **FastAPI (Python)** y un frontend sencillo con **HTML/CSS/JS (Vanilla)**.
 
 ### Estructura de Archivos Clave:
-- [backend/main.py](file:///G:/IA/PROYECTOS/Traductor/backend/main.py): Orquestador principal, expone la API, maneja las colas en segundo plano, la descarga de YouTube (`yt-dlp`), extracción de audio, sincronización y unión final.
-- [backend/whisper_client.py](file:///G:/IA/PROYECTOS/Traductor/backend/whisper_client.py): Cliente de transcripción. Invoca `insanely-fast-whisper` ejecutando el entorno de Windows nativo con `HF_HOME` apuntando al caché local de modelos Hugging Face para evitar descargas masivas de red.
-- [backend/translator.py](file:///G:/IA/PROYECTOS/Traductor/backend/translator.py): Cliente de traducción usando **Ollama** localmente.
-- [backend/tts_client.py](file:///G:/G:/IA/PROYECTOS/Traductor/backend/tts_client.py): Generador de audio usando **VibeVoice** (TTS). Llama de forma nativa al script local de VibeVoice en Windows.
-- [backend/audio_processor.py](file:///G:/IA/PROYECTOS/Traductor/backend/audio_processor.py): Alineación de subtítulos, estiramiento/acortamiento de audio con `pydub`, y multiplexado final del video sin audio original con el audio doblado usando `ffmpeg` de Windows.
-- [frontend/index.html](file:///G:/IA/PROYECTOS/Traductor/frontend/index.html), [frontend/style.css](file:///G:/IA/PROYECTOS/Traductor/frontend/style.css), [frontend/app.js](file:///G:/IA/PROYECTOS/Traductor/frontend/app.js): Interfaz de usuario.
+- [backend/main.py](backend/main.py): Orquestador principal, expone la API, maneja las colas en segundo plano, la descarga de YouTube (`yt-dlp`), extracción de audio, sincronización y unión final.
+- [backend/whisper_client.py](backend/whisper_client.py): Cliente de transcripción. Invoca `insanely-fast-whisper` ejecutando el entorno de Windows nativo con `HF_HOME` apuntando al caché local de modelos Hugging Face para evitar descargas masivas de red.
+- [backend/translator.py](backend/translator.py): Cliente de traducción usando **Ollama** localmente.
+- [backend/tts_client.py](backend/tts_client.py): Generador de audio usando **VibeVoice** (TTS). Llama de forma nativa al script local de VibeVoice en Windows.
+- [backend/audio_processor.py](backend/audio_processor.py): Alineación de subtítulos, estiramiento/acortamiento de audio con `pydub`, y multiplexado final del video sin audio original con el audio doblado usando `ffmpeg` de Windows.
+- [frontend/index.html](frontend/index.html), [frontend/style.css](frontend/style.css), [frontend/app.js](frontend/app.js): Interfaz de usuario.
 
 ---
 
 ## 2. Sistema de Caché y Modo Desarrollo
 
-Todos los archivos temporales se guardan localmente bajo `G:\IA\PROYECTOS\Traductor\cache\<task_id>\`.
+Todos los archivos temporales se guardan localmente bajo `cache/<task_id>/`.
 
 **Modo Simular con Caché (Dev Mode)**:
 - Para agilizar las pruebas y evitar baneos de YouTube, agregamos un checkbox en la interfaz: **"Modo Desarrollo: Simular con Caché Local"**.
@@ -44,6 +44,6 @@ Todos los archivos temporales se guardan localmente bajo `G:\IA\PROYECTOS\Traduc
 Joan interactuará directamente contigo enviándote los errores o fallos que arroje la consola al ejecutar el programa (Whisper, Ollama, VibeVoice o la mezcla final).
 Deberás:
 1. Analizar el trace de error detenidamente.
-2. Identificar el archivo responsable ([backend/main.py](file:///G:/IA/PROYECTOS/Traductor/backend/main.py), [backend/whisper_client.py](file:///G:/IA/PROYECTOS/Traductor/backend/whisper_client.py), etc.).
+2. Identificar el archivo responsable ([backend/main.py](backend/main.py), [backend/whisper_client.py](backend/whisper_client.py), etc.).
 3. Modificar el código adecuadamente usando tus herramientas.
 4. Responder a Joan indicándole qué arreglaste y cómo debe proceder.

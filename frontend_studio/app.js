@@ -11,14 +11,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectModel = document.getElementById('select-model') || document.createElement('select');
     const selectSpeaker = document.getElementById('select-speaker') || document.createElement('select');
     selectSpeaker.value = "cloned_speaker"; // Default for studio
-    const selectVibevoiceModel = document.getElementById('select-vibevoice-model') || document.createElement('select');
-    selectVibevoiceModel.value = "openbmb/VoxCPM2";
-    const inputVibevoiceCfg = document.getElementById('input-vibevoice-cfg') || document.createElement('input');
-    inputVibevoiceCfg.value = "2.0";
-    const inputVibevoiceSteps = document.getElementById('input-vibevoice-steps') || document.createElement('input');
-    inputVibevoiceSteps.value = "10";
-    const valVibevoiceCfg = document.getElementById('val-vibevoice-cfg') || document.createElement('span');
-    const valVibevoiceSteps = document.getElementById('val-vibevoice-steps') || document.createElement('span');
+    const selectTtsModel = document.getElementById('select-tts-model') || document.createElement('select');
+    selectTtsModel.value = "openbmb/VoxCPM2";
+    const inputTtsCfg = document.getElementById('input-tts-cfg') || document.createElement('input');
+    inputTtsCfg.value = "2.0";
+    const inputTtsSteps = document.getElementById('input-tts-steps') || document.createElement('input');
+    inputTtsSteps.value = "10";
+    const valTtsCfg = document.getElementById('val-tts-cfg') || document.createElement('span');
+    const valTtsSteps = document.getElementById('val-tts-steps') || document.createElement('span');
     const inputBatchSize = document.getElementById('input-batch-size') || document.createElement('input');
     const valBatchSize = document.getElementById('val-batch-size') || document.createElement('span');
     const inputSyncSize = document.getElementById('input-sync-size') || document.createElement('input');
@@ -28,11 +28,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const syncSizeGroup = document.getElementById('sync-size-group') || document.createElement('div');
 
     // Update range slider labels on input
-    inputVibevoiceCfg.addEventListener('input', () => {
-        valVibevoiceCfg.textContent = inputVibevoiceCfg.value;
+    inputTtsCfg.addEventListener('input', () => {
+        valTtsCfg.textContent = inputTtsCfg.value;
     });
-    inputVibevoiceSteps.addEventListener('input', () => {
-        valVibevoiceSteps.textContent = inputVibevoiceSteps.value;
+    inputTtsSteps.addEventListener('input', () => {
+        valTtsSteps.textContent = inputTtsSteps.value;
     });
     inputBatchSize.addEventListener('input', () => {
         valBatchSize.textContent = inputBatchSize.value;
@@ -280,9 +280,9 @@ document.addEventListener('DOMContentLoaded', () => {
             url: url,
             model: selectModel.value,
             speaker: selectSpeaker.value,
-            vibevoice_model: selectVibevoiceModel.value,
-            vibevoice_cfg: parseFloat(inputVibevoiceCfg.value),
-            vibevoice_steps: parseInt(inputVibevoiceSteps.value),
+            tts_model: selectTtsModel.value,
+            tts_cfg: parseFloat(inputTtsCfg.value),
+            tts_steps: parseInt(inputTtsSteps.value),
             tts_mode: selectTtsMode.value,
             batch_size: parseInt(inputBatchSize.value),
             sync_size: parseInt(inputSyncSize.value)
@@ -847,9 +847,9 @@ document.addEventListener('DOMContentLoaded', () => {
             phrase_index: studioActiveBlock.phrase_index,
             text: studioTextarea.value,
             speaker: selectStudioSpeaker ? selectStudioSpeaker.value : 'cloned_speaker',
-            vibevoice_model: selectStudioTtsModel ? selectStudioTtsModel.value : 'openbmb/VoxCPM2',
-            vibevoice_cfg: 2.0, // Fixed optimal for VoxCPM2
-            vibevoice_steps: 10
+            tts_model: selectStudioTtsModel ? selectStudioTtsModel.value : 'openbmb/VoxCPM2',
+            tts_cfg: 2.0,
+            tts_steps: 10
         };
         
         fetch(`/api/studio/${currentTaskId}/reprocess`, {

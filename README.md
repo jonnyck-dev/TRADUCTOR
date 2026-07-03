@@ -35,7 +35,7 @@ graph TD
 
 5. **Sincronización Temporal**: Ajusta el español traducido a los timestamps originales usando alineación proporcional.
 
-6. **TTS (`VibeVoice` o `VoxCPM`)**: Generación distribuida en servidores paralelos (múltiples puertos) para evitar colisiones de VRAM. Soporta clonación zero-shot de voz.
+6. **TTS (`VibeVoice` o `VoxCPM`)**: Configuración automática vía script de setup (`services/`). Generación distribuida en servidores paralelos (múltiples puertos) para evitar colisiones de VRAM. Soporta clonación zero-shot de voz.
 
 7. **Mezcla y Fusión**: Combina voz doblada con fondo instrumental a -1dB y ensambla el video final.
 
@@ -56,10 +56,13 @@ Editor no-lineal integrado en la web para corrección quirúrgica post-procesami
 
 ### Sistema
 - Python 3.10+
-- FFmpeg (en PATH o ruta personalizada en `audio_processor.py`)
+- FFmpeg (se descarga automáticamente en el setup; no requiere instalación manual)
 - Ollama corriendo localmente (puerto `11434`)
 - GPU NVIDIA con CUDA (probado en RTX 5070, CUDA 12.8)
 - Windows (nativo) o WSL con Ubuntu
+
+### Configuración
+Copiá `backend/.env.example` a `backend/.env` y ajustá las variables (modelos, puertos TTS, rutas FFmpeg, etc.).
 
 ### Dependencias Python
 ```
@@ -74,18 +77,22 @@ requests==2.32.3
 
 ## Instalación
 
-1. **Clonar**:
-   ```bash
-   git clone https://github.com/jonnyck-dev/TRADUCTOR.git
-   cd TRADUCTOR
-   ```
+El script de setup (`setup_env.bat` en Windows, `setup.sh` en Linux/WSL) automatiza todo el entorno:
+- Clona repositorios externos (`VibeVoice`, `VoxCPM`, `Demucs`) en la carpeta `services/`
+- Crea entornos virtuales Python (`venv`) para cada servicio
+- Descarga los pesos de los modelos necesarios
 
-2. **Instalar dependencias**:
+1. **Windows**:
    ```cmd
    setup_env.bat
    ```
 
-3. **TTS servers**: Tener clonados VibeVoice y/o VoxCPM accesibles localmente con sus entornos Python activos.
+2. **Linux / WSL**:
+   ```bash
+   ./setup.sh
+   ```
+
+3. **Servidores TTS**: El script de setup configura automáticamente VibeVoice y/o VoxCPM en `services/` con sus entornos Python y modelos. No se requiere configuración manual.
 
 ---
 
@@ -138,7 +145,8 @@ Servidor en **http://localhost:8000**
 - **VRAM**: Los servidores TTS se levantan y destruyen dinámicamente para liberar memoria.
 - **WSL**: El backend detecta `os.name` y usa `wsl_to_windows_path()` o rutas nativas según corresponda.
 - **Caché idempotente**: Cada etapa guarda resultados en `cache/{task_id}/`; si se interrumpe, retoma desde el último paso completo.
-- **FFmpeg**: Ruta hardcodeada `C:\Users\jpzam\Downloads\audioconverter\bin\ffmpeg.exe` en Windows; `ffmpeg` en PATH en WSL/Linux.
+- **FFmpeg**: El setup descarga una versión portable en `backend/bin/`. No requiere instalación manual. Si ya tenés ffmpeg, podés forzar su uso vía `FFMPEG_PATH` en `backend/.env`.
+- **Servicios externos**: VibeVoice, VoxCPM y Demucs son clonados automáticamente por el script de setup en `services/`. No se requieren symlinks ni configuración manual.
 
 ---
 

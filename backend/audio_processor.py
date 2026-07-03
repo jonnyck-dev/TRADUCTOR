@@ -3,8 +3,17 @@ import subprocess
 from pydub import AudioSegment
 
 def get_ffmpeg_cmd() -> str:
-    if os.name == 'nt':
-        return r'"C:\Users\jpzam\Downloads\audioconverter\bin\ffmpeg.exe"'
+    custom = os.environ.get("FFMPEG_PATH", "").strip()
+    if custom:
+        return custom
+    # Use bundled ffmpeg if available (no system install required)
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    bundled = os.path.join(base_dir, "backend", "bin", "ffmpeg.exe" if os.name == 'nt' else "ffmpeg")
+    if os.path.exists(bundled):
+        return f'"{bundled}"'
+    bundled_alt = os.path.join(base_dir, "backend", "bin", "ffmpeg")
+    if os.path.exists(bundled_alt):
+        return f'"{bundled_alt}"'
     return 'ffmpeg'
 
 def get_flat_timestamp(timestamp) -> list:

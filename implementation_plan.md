@@ -85,20 +85,65 @@ Este proyecto es una aplicación web local que automatiza el proceso de traducci
     - `tts_cfg` -> `cfg_value` (VoxCPM2 acepta de 1.0 a 3.0, recomendado: 2.0).
     - `tts_steps` -> `inference_timesteps` (Recomendado: 10 o 15).
   - Configurar la clonación Zero-Shot: si se selecciona `cloned_speaker`, pasar la ruta de `cloned_speaker.wav` directamente a `reference_wav_path` en `model.generate()`.
-  - *Nota*: Por simplicidad y YAGNI, usaremos el modo **Controllable Voice Cloning** básico pasándole solo `reference_wav_path` para lograr una clonación de timbre de alta fidelidad sin la sobre-ingeniería de transcribir la muestra de voz en inglés.
+   - *Nota*: Por simplicidad y YAGNI, usaremos el modo **Controllable Voice Cloning** básico pasándole solo `reference_wav_path` para lograr una clonación de timbre de alta fidelidad sin la sobre-ingeniería de transcribir la muestra de voz en inglés.
 
-### 4. Actualización del Frontend (UI y Controladores) (Pendiente)
-- **Problema**: El selector de modelos de síntesis y las etiquetas de la interfaz siguen mostrando VibeVoice y enviando parámetros específicos del modelo anterior.
-- **Solución**:
-  - Actualizar [frontend/index.html](file:///mnt/g/IA/PROYECTOS/Traductor/frontend/index.html) para renombrar los títulos a **VoxCPM2** y remover los modelos obsoletos de VibeVoice.
-  - Actualizar los range sliders y selectores de la interfaz para enviar variables genéricas (`tts_model`, `tts_cfg`, `tts_steps`) al backend.
-  - Adaptar [frontend/app.js](file:///mnt/g/IA/PROYECTOS/Traductor/frontend/app.js) para mapear estas nuevas variables al pipeline `/api/process`.
+### 4. Actualización del Frontend (UI y Controladores) (Completado)
+- **Problema**: El selector de modelos de síntesis y las etiquetas de la interfaz seguían mostrando VibeVoice y enviando parámetros específicos del modelo anterior.
+- **Solución aplicada**:
+  - Actualizado `frontend/index.html`: IDs `select-vibevoice-model` → `select-tts-model`, `input-vibevoice-cfg` → `input-tts-cfg`, etc.
+  - Actualizado `frontend/app.js`: variables JS renombradas a genéricas (`tts_model`, `tts_cfg`, `tts_steps`).
+  - Las variables ya se mapean al pipeline `/api/process` con los nuevos nombres.
+  - `ProcessRequest` en `backend/main.py` usa `tts_model`, `tts_cfg`, `tts_steps`.
+  - Endpoints del Studio Editor (`/reprocess`, `ReprocessRequest`) actualizados también.
 
-### 5. Migración de Infraestructura (Gestor de Paquetes Moderno) (Pendiente)
-- **Problema**: El proyecto utiliza actualmente `venv` y `pip` tradicionales, lo que causa demoras significativas (5-10 minutos) al instalar entornos pesados para modelos de audio y aumenta el riesgo de "Dependency Hell" (conflictos entre versiones de PyTorch, CUDA y librerías).
-- **Solución**:
-  - **Migrar a `uv` (Astral)**: Reemplazar todas las creaciones de entorno virtual y comandos de instalación en los archivos `.bat` para usar el gestor ultrarrápido en Rust (`uv venv` y `uv pip install`).
-  - Esto nos permitirá usar el caché global mediante hardlinks, reduciendo la instalación de librerías masivas como PyTorch a simples segundos, resolviendo cualquier conflicto de dependencias al instante y mejorando drásticamente los tiempos de actualización del proyecto.
+### 5. Migración de Infraestructura (Gestor de Paquetes Moderno) (Pospuesto)
+- **Problema**: El proyecto utiliza actualmente `venv` y `pip` tradicionales.
+- **Estado**: Migración a `uv` pospuesta. Se mantiene `venv` + `pip` por ahora para mantener compatibilidad máxima con Windows. Se evaluará migrar cuando `uv` tenga soporte más maduro en Windows.
+
+---
+
+## 🚀 Fase 3: Portabilidad Total — Completado
+
+### Objetivo
+Proyecto completamente portable: sin rutas absolutas, con setup automatizado que clona y configura los proyectos externos.
+
+### Cambios realizados
+
+| # | Tarea | Archivos | Resultado |
+|---|-------|----------|-----------|
+| 1 | Eliminar archivos de test/depuración | `split_and_translate.py`, `fix_task.py`, `test_translation.py`, `test_multi_server.py`, `batch_tts_test.py`, `run_benchmark.py`, `setup_symlinks.bat`, `server_debug.log` | ✅ Eliminados |
+| 2 | `.gitignore` actualizado | `.gitignore` — ignora venvs subproyectos, logs, modelos, `.env` | ✅ |
+| 3 | Fix `audio_processor.py` | `get_ffmpeg_cmd()` → usa `ffmpeg` del PATH o `$FFMPEG_PATH` del `.env` | ✅ |
+| 4 | Fix `whisper_client.py` | Ruta absoluta `C:\users\jpzam\...` → ruta relativa `backend/vibevoice/env_vibevoice/...` | ✅ |
+| 5 | Migrar naming `vibevoice_*` → `tts_*` | `backend/main.py`, `tts_client.py`, `frontend/`, `frontend_studio/` | ✅ |
+| 6 | Soporte `.env` | `.env.example` + `python-dotenv` en `requirements.txt` | ✅ |
+| 7 | Scripts de setup portable | `setup_env.bat` (Windows) + `setup.sh` (Linux/WSL) | ✅ |
+| 8 | Models dinámicos Ollama | Eliminado fallback estático en `/api/models` | ✅ |
+| 9 | Documentación actualizada | `README.md`, `debugagent.md`, `deployment_plan.md` | ✅ |
+
+### Repositorios externos
+| Proyecto | URL | Destino |
+|----------|-----|---------|
+| VibeVoice | `https://github.com/vibevoice-community/VibeVoice.git` | `backend/vibevoice/` |
+| VoxCPM | `https://github.com/OpenBMB/VoxCPM.git` | `backend/VoxCPM/` (código trackeado, venv por setup) |
+| Demucs (UVR5-UI) | `https://github.com/Eddycrack864/UVR5-UI.git` | `backend/demucs/` |
+
+### Flujo de instalación para nuevo usuario
+1. `git clone <repo>` — clona el proyecto principal
+2. `setup_env.bat` (Windows) o `./setup.sh` (Linux/WSL):
+   - Crea venv principal + instala dependencias
+   - Clona VibeVoice y Demucs de GitHub
+   - Crea venvs para VoxCPM, VibeVoice, Demucs
+   - Descarga modelos desde Hugging Face (VoxCPM-0.5B, VibeVoice-1.5B, VibeVoice-0.5B)
+3. `run.bat` o `./run.sh` — inicia el servidor
+4. Abrir `http://localhost:8000`
+
+### Variables de entorno (`.env`)
+| Variable | Default | Descripción |
+|----------|---------|-------------|
+| `FFMPEG_PATH` | `ffmpeg` (PATH) | Ruta al ejecutable de ffmpeg |
+| `OLLAMA_HOST` | `localhost:11434` | URL de la API de Ollama |
+| `HF_HOME` | (default HF) | Directorio de caché de Hugging Face |
 
 ---
 

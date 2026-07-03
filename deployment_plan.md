@@ -29,21 +29,21 @@ This document outlines the architectural changes needed to make the YouTube Vide
 
 ## Proposed Changes
 
-To achieve full portability, we will restructure the project to make all dependencies local and configurable via environment variables. For local development on Windows, instead of duplicating massive files, we will use Windows Directory Symbolic Links (`mklink /d`) to link the existing external repositories (VibeVoice, Whisper models) directly into the project workspace:
+To achieve full portability, we will restructure the project to make all dependencies local and configurable via environment variables. External projects (VibeVoice) are cloned by the setup script directly into the workspace, eliminating the need for absolute paths or OS-specific symlinks:
 
 ```
-G:\IA\PROYECTOS\Traductor\
+Traductor/
 ├── .env.example             # Configuration template
 ├── Dockerfile               # Packaging FastAPI + PyTorch + FFmpeg (Future Linux/Cloud)
 ├── docker-compose.yml       # Composing Backend + Ollama + NVIDIA GPU access
-├── setup_symlinks.bat       # Script to link VibeVoice and Whisper folders natively
+├── setup.sh / setup.bat     # Script to clone external dependencies and install requirements
 ├── backend/
 │   ├── .env                 # Local environment config
 │   ├── main.py              # Dynamic path configuration (BASE_DIR)
-│   ├── requirements.txt     # Updated with PyTorch, insanely-fast-whisper, etc.
-│   ├── whisper_client.py    # Native Windows execution
-│   ├── tts_client.py        # Native Windows execution
-│   └── vibevoice/           # Linked via mklink /d to C:\Users\jpzam\VibeVoice
+│   ├── requirements.txt     # Updated with PyTorch, WhisperX, etc.
+│   ├── whisper_client.py    # Native transcription via WhisperX
+│   ├── tts_client.py        # Native TTS via VibeVoice
+│   └── vibevoice/           # Cloned by setup script
 └── frontend/
 ```
 
@@ -59,7 +59,7 @@ OLLAMA_HOST=http://localhost:11434
 OLLAMA_MODEL=gemma4:e2b-it-qat
 
 # Whisper Configuration
-# If local, runs native python insanely-fast-whisper. If remote, can point to a Whisper API
+# Uses WhisperX from the VibeVoice virtual environment
 WHISPER_MODE=local 
 
 # VibeVoice Configurations
@@ -72,19 +72,15 @@ FFMPEG_PATH=ffmpeg  # uses system path by default, can be custom path
 ```
 
 ### 2. Native Whisper Client Integration
-Currently, `whisper_client.py` calls the Windows `.exe` via `cmd.exe`. 
-For portability, we will update it to run the local Python package `insanely-fast-whisper` directly if not in legacy local-only mode:
+The `whisper_client.py` uses WhisperX for transcription, running from the shared VibeVoice virtual environment:
 ```python
 import sys
 import subprocess
 import os
 
 def transcribe_audio(audio_path: str, output_json_path: str, language: str = "English") -> dict:
-    # If WHISPER_MODE is local, run native CLI
-    if os.getenv("WHISPER_MODE", "local") == "local":
-        cmd = f"insanely-fast-whisper --file-name {audio_path} --language {language} --flash True --transcript-path {output_json_path}"
-        subprocess.run(cmd, shell=True, check=True)
-    # Else fallback to legacy Windows cmd.exe interop mode
+    cmd = f"whisperx --model large-v3 --language {language} --output_format json --output_dir {os.path.dirname(output_json_path)} {audio_path}"
+    subprocess.run(cmd, shell=True, check=True)
 ```
 
 ### 3. Native VibeVoice Integration
@@ -94,7 +90,7 @@ Instead of calling a Windows script via command prompt, we will import VibeVoice
 * Subprocessing is completely avoided.
 
 ### 4. Dockerization
-We will add a `Dockerfile` that uses `nvidia/cuda` as the base image, installs Python, FFmpeg, installs our dependencies (including PyTorch and insanely-fast-whisper), and downloads the VibeVoice model weights:
+We will add a `Dockerfile` that uses `nvidia/cuda` as the base image, installs Python, FFmpeg, installs our dependencies (including PyTorch and WhisperX), and downloads the VibeVoice model weights:
 ```dockerfile
 FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04
 
@@ -128,11 +124,11 @@ CMD ["python3", "backend/main.py"]
 
 ### Phase 1: Local Verification (Current)
 - [ ] **Launch Application**: Start the local FastAPI server natively on Windows using `python backend/main.py` (or through the Windows venv).
-- [ ] **Download Video**: Input a YouTube URL and verify the video is successfully saved to `G:\IA\PROYECTOS\Traductor\cache\{task_id}\video.mp4` and audio extracted to `audio.wav`.
-- [ ] **Whisper Transcription**: Verify `whisper_client.py` transcribes the English audio via local Windows `insanely-fast-whisper.exe` (pointing HF_HOME to the linked models directory) and outputs `english_whisper.json`.
+- [ ] **Download Video**: Input a YouTube URL and verify the video is successfully saved to `cache/{task_id}/video.mp4` and audio extracted to `audio.wav`.
+- [ ] **Whisper Transcription**: Verify `whisper_client.py` transcribes the English audio via WhisperX (from the VibeVoice venv) and outputs `english_whisper.json`.
 - [ ] **Ollama Translation**: Verify `translator.py` translates the JSON chunks into Spanish using `gemma4:e2b-it-qat` and outputs `spanish_translated.json`.
-- [ ] **TTS Dubbing**: Verify `tts_client.py` generates the continuous Spanish WAV file via local Windows VibeVoice (either linked or absolute path).
-- [ ] **TTS Transcription**: Verify `insanely-fast-whisper` transcribes the generated Spanish WAV to `spanish_whisper.json`.
+- [ ] **TTS Dubbing**: Verify `tts_client.py` generates the continuous Spanish WAV file via VibeVoice and outputs `spanish_dubbed.wav`.
+- [ ] **TTS Transcription**: Verify WhisperX transcribes the generated Spanish WAV to `spanish_whisper.json`.
 - [ ] **Synchronization & Merging**: Verify `audio_processor.py` successfully aligns timestamps, time-stretches segments using Windows `ffmpeg.exe`, overlays them, and merges the audio back into the video.
 - [ ] **Frontend Player**: Verify that the browser player can stream the cached dubbed video and highlight synced subtitles.
 

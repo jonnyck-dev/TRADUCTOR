@@ -1,11 +1,39 @@
+# Virtual environments
 venv/
-cache/
 __pycache__/
 *.pyc
-.DS_Store
+*.pyo
+
+# Subproject venvs
+backend/vibevoice/env_vibevoice/
+backend/VoxCPM/env_voxcpm/
+backend/demucs/env/
+
+# Bundled binaries (downloaded by setup script)
+backend/bin/ffmpeg
+backend/bin/ffmpeg.exe
+
+# Model weights (downloaded by setup script)
+backend/vibevoice/checkpoints/
+backend/VoxCPM/pretrained_models/
+backend/demucs/models/
+
+# Cache directories
+cache/
+
+# Media files
 *.mp4
 *.wav
 *.m4a
-*.json
+*.mp3
+
+# Logs
 *.log
-backend/VoxCPM/pretrained_models/
+
+# Environment config (local)
+.env
+backend/.env
+
+# OS generated
+.DS_Store
+Thumbs.db

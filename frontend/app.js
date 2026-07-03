@@ -12,11 +12,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const selectModel = document.getElementById('select-model');
     const selectSpeaker = document.getElementById('select-speaker');
-    const selectVibevoiceModel = document.getElementById('select-vibevoice-model');
-    const inputVibevoiceCfg = document.getElementById('input-vibevoice-cfg');
-    const inputVibevoiceSteps = document.getElementById('input-vibevoice-steps');
-    const valVibevoiceCfg = document.getElementById('val-vibevoice-cfg');
-    const valVibevoiceSteps = document.getElementById('val-vibevoice-steps');
+    const selectTtsModel = document.getElementById('select-tts-model');
+    const inputTtsCfg = document.getElementById('input-tts-cfg');
+    const inputTtsSteps = document.getElementById('input-tts-steps');
+    const valTtsCfg = document.getElementById('val-tts-cfg');
+    const valTtsSteps = document.getElementById('val-tts-steps');
     const inputBatchSize = document.getElementById('input-batch-size');
     const valBatchSize = document.getElementById('val-batch-size');
     const inputSyncSize = document.getElementById('input-sync-size');
@@ -24,13 +24,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectTtsMode = document.getElementById('select-tts-mode');
     const batchSizeGroup = document.getElementById('batch-size-group');
     const syncSizeGroup = document.getElementById('sync-size-group');
+    const btnReloadModels = document.getElementById('btn-reload-models');
+    const ollamaStatus = document.getElementById('ollama-status');
 
     // Update range slider labels on input
-    inputVibevoiceCfg.addEventListener('input', () => {
-        valVibevoiceCfg.textContent = inputVibevoiceCfg.value;
+    inputTtsCfg.addEventListener('input', () => {
+        valTtsCfg.textContent = inputTtsCfg.value;
     });
-    inputVibevoiceSteps.addEventListener('input', () => {
-        valVibevoiceSteps.textContent = inputVibevoiceSteps.value;
+    inputTtsSteps.addEventListener('input', () => {
+        valTtsSteps.textContent = inputTtsSteps.value;
     });
     inputBatchSize.addEventListener('input', () => {
         valBatchSize.textContent = inputBatchSize.value;
@@ -156,8 +158,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 opt.value = '';
                 opt.textContent = '(No se encontraron modelos de Ollama)';
                 selectModel.appendChild(opt);
+                if (ollamaStatus) ollamaStatus.style.display = 'block';
                 return;
             }
+            
+            if (ollamaStatus) ollamaStatus.style.display = 'none';
             
             const localGroup = document.createElement('optgroup');
             localGroup.label = 'Modelos Locales (Ollama)';
@@ -234,6 +239,20 @@ document.addEventListener('DOMContentLoaded', () => {
         globalStatus.innerHTML = '<span class="dot"></span> Listo para doblar';
         currentTaskId = null;
     });
+
+    // Reload models button
+    if (btnReloadModels) {
+        btnReloadModels.addEventListener('click', () => {
+            btnReloadModels.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            btnReloadModels.disabled = true;
+            loadOllamaModels();
+            // Re-enable after a short delay
+            setTimeout(() => {
+                btnReloadModels.innerHTML = '<i class="fa-solid fa-rotate"></i>';
+                btnReloadModels.disabled = false;
+            }, 3000);
+        });
+    }
 
     // Initial calls
     loadOllamaModels();
@@ -332,9 +351,9 @@ document.addEventListener('DOMContentLoaded', () => {
             url: url,
             model: selectModel.value,
             speaker: selectSpeaker.value,
-            vibevoice_model: selectVibevoiceModel.value,
-            vibevoice_cfg: parseFloat(inputVibevoiceCfg.value),
-            vibevoice_steps: parseInt(inputVibevoiceSteps.value),
+            tts_model: selectTtsModel.value,
+            tts_cfg: parseFloat(inputTtsCfg.value),
+            tts_steps: parseInt(inputTtsSteps.value),
             tts_mode: selectTtsMode.value,
             batch_size: parseInt(inputBatchSize.value),
             sync_size: parseInt(inputSyncSize.value)
@@ -752,6 +771,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnStudioPlayOrig = document.getElementById('btn-studio-play-orig');
     const btnStudioPlayDub = document.getElementById('btn-studio-play-dub');
     const btnStudioRegenerate = document.getElementById('btn-studio-regenerate');
+    const btnStudioDelete = document.getElementById('btn-studio-delete');
     const studioAudioPlayer = document.getElementById('studio-audio-player');
     const btnStudioFinalize = document.getElementById('btn-studio-finalize');
 
@@ -1170,9 +1190,9 @@ document.addEventListener('DOMContentLoaded', () => {
             phrase_index: studioActiveBlock.phrase_index,
             text: studioTextarea.value,
             speaker: selectStudioSpeaker ? selectStudioSpeaker.value : selectSpeaker.value,
-            vibevoice_model: selectStudioTtsModel ? selectStudioTtsModel.value : selectVibevoiceModel.value,
-            vibevoice_cfg: parseFloat(inputVibevoiceCfg.value),
-            vibevoice_steps: parseInt(inputVibevoiceSteps.value)
+            tts_model: selectStudioTtsModel ? selectStudioTtsModel.value : selectTtsModel.value,
+            tts_cfg: parseFloat(inputTtsCfg.value),
+            tts_steps: parseInt(inputTtsSteps.value)
         };
         
         fetch(`/api/studio/${currentTaskId}/reprocess`, {
@@ -1198,6 +1218,43 @@ document.addEventListener('DOMContentLoaded', () => {
             btnStudioRegenerate.innerHTML = '<i class="fa-solid fa-rotate"></i> Regenerate Audio (5s)';
             btnStudioRegenerate.disabled = false;
         });
+    });
+
+    btnStudioDelete.addEventListener('click', () => {
+        if (!studioActiveBlock || !currentTaskId) return;
+        if (confirm(`¿Estás seguro de que quieres eliminar la frase ${studioActiveBlock.phrase_index}? Esto re-indexará las frases y no se puede deshacer.`)) {
+            
+            btnStudioDelete.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Eliminando...';
+            btnStudioDelete.disabled = true;
+            
+            fetch(`/api/studio/${currentTaskId}/delete/${studioActiveBlock.phrase_index}`, {
+                method: 'POST'
+            })
+            .then(res => {
+                if (!res.ok) throw new Error('Network response was not ok');
+                return res.json();
+            })
+            .then(data => {
+                btnStudioDelete.innerHTML = '<i class="fa-solid fa-check"></i> ¡Frase Eliminada!';
+                setTimeout(() => {
+                    if (btnStudioDelete) {
+                        btnStudioDelete.innerHTML = '<i class="fa-solid fa-trash"></i> Eliminar Frase';
+                        btnStudioDelete.disabled = false;
+                    }
+                }, 2000);
+                
+                // Refresh the timeline data
+                studioActiveBlock = null;
+                studioTextarea.value = '';
+                inspectorContent.innerHTML = '<p style="color: #888; text-align: center; margin-top: 50px;">Selecciona un bloque para ver los detalles.</p>';
+                loadStudioData(currentTaskId);
+            })
+            .catch(err => {
+                alert('Error eliminando frase: ' + err.message);
+                btnStudioDelete.innerHTML = '<i class="fa-solid fa-trash"></i> Eliminar Frase';
+                btnStudioDelete.disabled = false;
+            });
+        }
     });
 
     btnStudioFinalize.addEventListener('click', () => {

@@ -173,7 +173,7 @@ def align_words_to_chunks(chunk_texts, whisperx_words, total_duration):
         
     return results
 
-def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-Frank_man", task_id: str = None, vibevoice_model: str = None, vibevoice_cfg: float = 1.3, vibevoice_steps: int = 10) -> list:
+def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-Frank_man", task_id: str = None, tts_model: str = None, tts_cfg: float = 1.3, tts_steps: int = 10) -> list:
     """
     Generates individual MP3 files for each translated chunk using TTS (VoxCPM or VibeVoice).
     Returns a list of absolute paths to the generated MP3 files.
@@ -230,7 +230,7 @@ def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-
         return mp3_paths
 
     # 2. Determine TTS Engine (VoxCPM or VibeVoice)
-    model_name = vibevoice_model or "openbmb/VoxCPM2"
+    model_name = tts_model or "openbmb/VoxCPM2"
     engine = "vibevoice"
     if "vox" in model_name.lower() or "cpm" in model_name.lower() or "openbmb" in model_name.lower():
         engine = "voxcpm"
@@ -314,8 +314,8 @@ def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-
                                 "text": text,
                                 "speaker": speaker_name,
                                 "output_path": win_temp_wav,
-                                "cfg_value": vibevoice_cfg,
-                                "inference_timesteps": vibevoice_steps,
+                                "cfg_value": tts_cfg,
+                                "inference_timesteps": tts_steps,
                                 "reference_wav_path": win_cloned_wav_path if speaker_name == "cloned_speaker" else None,
                                 "normalize": False
                             }
@@ -324,8 +324,8 @@ def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-
                                 "text": text,
                                 "speaker": speaker_name,
                                 "output_path": win_temp_wav,
-                                "cfg_scale": vibevoice_cfg,
-                                "ddpm_steps": vibevoice_steps
+                                "cfg_scale": tts_cfg,
+                                "ddpm_steps": tts_steps
                             }
                         
                         response = requests.post(server_url, json=payload, timeout=None)
