@@ -829,13 +829,19 @@ video {
     flex-direction: column;
     background-color: #fafafa;
     z-index: 1000;
-    position: fixed;
+    position: relative;
     top: 0;
     left: 0;
     overflow: hidden;
     padding: 10px;
     box-sizing: border-box;
     gap: 10px;
+}
+
+@media (min-width: 769px) {
+    .studio-container {
+        position: fixed;
+    }
 }
 
 .studio-header {
