@@ -1177,9 +1177,9 @@ video {
         content: "Listo";
     }
 
-    /* Video player full width */
+    /* Video player taller en mobile */
     .player-wrapper {
-        aspect-ratio: 16 / 10;
+        aspect-ratio: 10 / 14;
         border-radius: 12px;
         margin-bottom: 16px;
     }
@@ -1251,9 +1251,13 @@ video {
         min-height: 44px;
     }
 
-    /* Subtitles */
+    /* Subtitles más compactos en mobile */
+    .subtitles-container {
+        max-height: 200px !important;
+    }
+
     .subtitles-viewport {
-        max-height: 200px;
+        max-height: 120px !important;
     }
 
     .subtitle-line {
