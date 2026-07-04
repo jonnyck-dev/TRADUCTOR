@@ -46,6 +46,41 @@ document.addEventListener('DOMContentLoaded', () => {
         sidebar.classList.add('collapsed');
     }
 
+    // --- Notification System ---
+    let notificationPermission = 'default';
+
+    function requestNotificationPermission() {
+        if (!('Notification' in window)) return;
+        Notification.requestPermission().then(perm => {
+            notificationPermission = perm;
+        });
+    }
+
+    function notifyCompleted() {
+        if (!('Notification' in window)) return;
+        if (Notification.permission === 'granted') {
+            new Notification('JANUS Dubber', {
+                body: 'Tu video ya está listo',
+                icon: '/favicon.ico',
+                badge: '/favicon.ico',
+                vibrate: [200, 100, 200],
+                requireInteraction: true
+            });
+        }
+        document.title = 'Listo! - JANUS Dubber';
+    }
+
+    function notifyFailed(msg) {
+        if (!('Notification' in window)) return;
+        if (Notification.permission === 'granted') {
+            new Notification('JANUS Dubber', {
+                body: `Error: ${msg}`,
+                icon: '/favicon.ico',
+                vibrate: [300, 100, 300]
+            });
+        }
+    }
+
     // Update range slider labels on input
     inputTtsCfg.addEventListener('input', () => {
         valTtsCfg.textContent = inputTtsCfg.value;
@@ -404,6 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(data => {
             const taskId = data.task_id;
             currentTaskId = taskId;
+            requestNotificationPermission();
             startPolling(taskId);
         })
         .catch(err => {
@@ -457,12 +493,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (data.status === 'completed') {
                     clearInterval(pollInterval);
+                    notifyCompleted();
                     loadVideo(data.result);
                 } else if (data.status === 'failed') {
                     clearInterval(pollInterval);
+                    notifyFailed(data.error || 'Ocurrió un error desconocido.');
                     showError(data.error || 'Ocurrió un error desconocido.');
                 } else if (data.status === 'stopped') {
                     clearInterval(pollInterval);
+                    notifyFailed(data.error || 'Doblaje detenido por el usuario.');
                     showStopped(data.error || 'Doblaje detenido por el usuario.');
                 }
             })
