@@ -1262,13 +1262,41 @@ video {
         padding: 4px 8px;
     }
 
+    /* Studio overlay compact on mobile */
+    #studio-cache-overlay > div {
+        padding: 24px !important;
+        width: 95% !important;
+    }
+
     /* Studio mobile */
+    .studio-container {
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    .studio-cache-actions {
+        flex-direction: column !important;
+        gap: 10px !important;
+    }
+
+    .studio-cache-actions .glow-button {
+        width: 100%;
+        text-align: center;
+        justify-content: center;
+    }
+
     .studio-workspace {
         flex-direction: column;
     }
 
-    .studio-left { flex: 1; min-height: 200px; }
-    .studio-right { flex: none; max-height: 40vh; }
+    .studio-left { flex: none; min-height: 200px; max-height: 35vh; }
+    .studio-right { flex: none; max-height: none; overflow-y: auto; padding-bottom: 20px; }
+
+    .studio-timeline-section {
+        flex: 0 0 180px;
+        min-height: 180px;
+        overflow-y: auto;
+    }
 
     .timeline-container {
         flex-direction: column;
@@ -1315,4 +1343,10 @@ video {
     .subtitle-line .text-esp {
         font-size: 12px;
     }
+
+    .studio-container { padding: 6px; gap: 6px; }
+    .studio-left { max-height: 30vh; }
+    .studio-timeline-section { flex: 0 0 150px; min-height: 150px; }
+    .studio-header { padding: 8px 12px; }
+    .studio-header .logo h1 { font-size: 14px; }
 }
