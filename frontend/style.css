@@ -1270,41 +1270,48 @@ video {
         padding: 4px 8px;
     }
 
-    /* Studio overlay compact on mobile */
+    /* Studio overlay - full screen on mobile */
+    #studio-cache-overlay {
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 100 !important;
+        background: rgba(250, 250, 250, 0.98) !important;
+    }
+
     #studio-cache-overlay > div {
-        padding: 24px 20px !important;
-        width: 92% !important;
-        max-width: 380px !important;
-        min-height: 320px !important;
+        padding: 32px 24px !important;
+        width: 90% !important;
+        max-width: 400px !important;
+        min-height: 380px !important;
         display: flex !important;
         flex-direction: column !important;
         justify-content: center !important;
     }
 
     #studio-cache-overlay h2 {
-        font-size: 20px !important;
-        margin-bottom: 10px !important;
-    }
-
-    #studio-cache-overlay p {
-        font-size: 14px !important;
-        margin-bottom: 20px !important;
-    }
-
-    #studio-cache-overlay .fa-folder-open {
-        font-size: 40px !important;
-        margin-bottom: 16px !important;
-    }
-
-    #studio-cache-overlay select {
-        font-size: 15px !important;
-        padding: 12px !important;
+        font-size: 22px !important;
         margin-bottom: 12px !important;
     }
 
-    #studio-cache-overlay .glow-button {
-        padding: 14px 24px !important;
+    #studio-cache-overlay p {
         font-size: 15px !important;
+        margin-bottom: 24px !important;
+    }
+
+    #studio-cache-overlay .fa-folder-open {
+        font-size: 44px !important;
+        margin-bottom: 20px !important;
+    }
+
+    #studio-cache-overlay select {
+        font-size: 16px !important;
+        padding: 14px !important;
+        margin-bottom: 16px !important;
+    }
+
+    #studio-cache-overlay .glow-button {
+        padding: 16px 28px !important;
+        font-size: 16px !important;
         width: 100% !important;
         margin-top: auto !important;
     }
