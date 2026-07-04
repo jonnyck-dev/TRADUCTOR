@@ -934,7 +934,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (btnVisDubbed) {
             btnVisDubbed.innerHTML = isV2Visible ? '<i class="fa-solid fa-eye"></i>' : '<i class="fa-solid fa-eye-slash text-gray"></i>';
-            btnVisDubbed.style.color = isV2Visible ? '#00f2fe' : '';
+            btnVisDubbed.style.color = isV2Visible ? '#b8860b' : '';
         }
         if (btnVisOriginal) {
             btnVisOriginal.innerHTML = isV1Visible ? '<i class="fa-solid fa-eye"></i>' : '<i class="fa-solid fa-eye-slash text-gray"></i>';
@@ -1077,11 +1077,11 @@ document.addEventListener('DOMContentLoaded', () => {
             mark.style.position = 'absolute';
             mark.style.left = `${s * PIXELS_PER_SECOND}px`;
             mark.style.bottom = '0';
-            mark.style.borderLeft = '1px solid rgba(255,255,255,0.3)';
+            mark.style.borderLeft = '1px solid rgba(0,0,0,0.15)';
             mark.style.height = '10px';
             mark.style.paddingLeft = '5px';
             mark.style.fontSize = '10px';
-            mark.style.color = 'rgba(255,255,255,0.5)';
+            mark.style.color = 'rgba(0,0,0,0.3)';
             mark.textContent = formatTime(s);
             timelineRuler.appendChild(mark);
         }
