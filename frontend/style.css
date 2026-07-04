@@ -1179,7 +1179,8 @@ video {
 
     /* Video player taller en mobile */
     .player-wrapper {
-        aspect-ratio: 10 / 14;
+        aspect-ratio: 16 / 10;
+        min-height: 500px !important;
         border-radius: 12px;
         margin-bottom: 16px;
     }
@@ -1227,6 +1228,8 @@ video {
         border-left: none;
         border-top: 1px solid var(--border-color);
         padding: 20px 16px;
+        position: relative;
+        z-index: 95;
         transition: max-height 0.3s ease, opacity 0.3s ease;
     }
 
