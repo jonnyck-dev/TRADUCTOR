@@ -1115,8 +1115,10 @@ video {
 
 @media (max-width: 768px) {
     body {
-        display: block;
-        height: auto;
+        display: block !important;
+        height: auto !important;
+        align-items: initial !important;
+        justify-content: initial !important;
     }
 
     .app-container {
