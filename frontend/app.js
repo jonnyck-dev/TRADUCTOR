@@ -1116,9 +1116,14 @@ document.addEventListener('DOMContentLoaded', () => {
         fetch(`/api/studio/${currentTaskId}/data`)
             .then(res => {
                 console.log('[Studio] API response status:', res.status);
+                if (res.status === 404) {
+                    alert('Esta caché no tiene datos del editor. Procesa el video hasta el final antes de abrir el Estudio.');
+                    return null;
+                }
                 return res.json();
             })
             .then(data => {
+                if (!data) return;
                 console.log('[Studio] API data received:', data.status, 'phrases:', data.phrases ? data.phrases.length : 0);
                 if (data.status === 'ok') {
                     studioData = data.phrases;
@@ -1128,7 +1133,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert("Error loading studio data.");
                 }
             })
-            .catch(err => console.error("Studio error:", err));
+            .catch(err => {
+                console.error("Studio error:", err);
+                alert("No se pudo cargar el editor. Asegúrate de que el video haya sido completamente procesado.");
+            });
     }
 
     function renderTimeline() {
