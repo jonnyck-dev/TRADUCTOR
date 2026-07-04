@@ -1270,10 +1270,10 @@ video {
 
     /* Studio mobile - scrollable layout */
     .studio-container {
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
+        position: relative !important;
         height: auto !important;
         min-height: 100vh;
+        overflow: visible !important;
     }
 
     .studio-cache-actions {
