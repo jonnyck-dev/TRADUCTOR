@@ -26,6 +26,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const syncSizeGroup = document.getElementById('sync-size-group');
     const btnReloadModels = document.getElementById('btn-reload-models');
     const ollamaStatus = document.getElementById('ollama-status');
+    const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
+    const sidebar = document.querySelector('.sidebar');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+    // Sidebar toggle for mobile
+    btnToggleSidebar.addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+        sidebarOverlay.style.display = sidebar.classList.contains('collapsed') ? 'none' : 'block';
+    });
+
+    sidebarOverlay.addEventListener('click', () => {
+        sidebar.classList.add('collapsed');
+        sidebarOverlay.style.display = 'none';
+    });
+
+    // Collapse sidebar by default on mobile
+    if (window.innerWidth <= 768) {
+        sidebar.classList.add('collapsed');
+    }
 
     // Update range slider labels on input
     inputTtsCfg.addEventListener('input', () => {
