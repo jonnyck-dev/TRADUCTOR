@@ -140,3 +140,65 @@ CMD ["python3", "backend/main.py"]
 - [ ] **Docker Packaging**: Finalize the `Dockerfile` and `docker-compose.yml` to compose the app and Ollama service with GPU passthrough.
 - [ ] **Verify Cloud Deploy**: Test running the container on a cloud VPS (e.g. AWS or RunPod).
 
+---
+
+## Public Landing Page & Remote Access (JANUS)
+
+### Overview
+
+- **Landing page**: Proyecto separado `JANUS` — página corporativa pública (blanco/dorado) que promociona el servicio a creadores de contenido.
+- **App real**: Se expone a internet mediante **Cloudflare Tunnel** (túnel saliente, sin abrir puertos).
+- **Flujo**: `Landing (pública)` → clic "Probar ahora" → `App (tunnel)` → `localhost:8000`
+
+### Repositories
+
+| Repo | URL | Descripción |
+|---|---|---|
+| **TRADUCTOR** (este) | `jonnyck-dev/TRADUCTOR` | App principal (no cambia) |
+| **JANUS Landing** | `jonnyck-dev/janus-landing` | Landing page corporativa |
+
+### Hosting
+
+| Componente | Dónde | URL |
+|---|---|---|
+| Landing | Vercel (auto-deploy desde GitHub) | `https://janus-landing-red.vercel.app` |
+| App (tunnel) | Cloudflare Tunnel → Windows | `https://<hash>.trycloudflare.com` (cambia cada sesión) |
+
+### Cloudflare Tunnel — Setup en Windows
+
+La app corre **nativamente en Windows** (`run.bat`). Cloudflared debe estar en Windows:
+
+```
+# Descargar (ya instalado)
+C:\Users\jpzam\cloudflared.exe
+
+# Autenticar (solo primera vez)
+cloudflared.exe tunnel login
+
+# Crear túnel (cada sesión)
+cloudflared.exe tunnel --url http://localhost:8000
+```
+
+- **Quick tunnel**: La URL cambia al reiniciar cloudflared. Para pruebas y acceso temporal.
+- **Named tunnel** (futuro): Con dominio propio, URL fija permanente.
+
+### Cómo actualizar la URL en la landing
+
+Editar `janus-landing/app.js`, cambiar la variable `JANUS_APP_URL` y pushear. Vercel redeploya automáticamente.
+
+### Autenticación — Fase 2 (futura)
+
+Plan pendiente de implementación:
+
+1. **Firebase Auth** — Login con Google en la landing o en la app
+2. **Firestore** — Base de usuarios registrados
+3. **API Keys** — 1 por usuario, generada al registrarse
+4. **Backend** — Validar API key en cada request a `/api/*`
+5. **Managed service** — Opción "Nosotros resubimos tus videos a tu canal en español"
+
+### Recordatorios importantes
+
+- El servidor corre en **Windows** (`run.bat` usa `venv\Scripts\activate`), no en WSL
+- El tunnel debe ejecutarse desde **cmd.exe en Windows**, no desde WSL
+- Si el proceso de cloudflared se cierra, el tunnel muere y la landing deja de funcionar
+
