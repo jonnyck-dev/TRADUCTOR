@@ -134,6 +134,41 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeSubIndex = -1;
     let currentTaskId = null;
 
+    // --- Recuperar estado de tarea al recargar página ---
+    const savedTaskId = localStorage.getItem('janus_taskId');
+    const savedTaskUrl = localStorage.getItem('janus_taskUrl');
+    if (savedTaskId) {
+        fetch(`/api/status/${savedTaskId}`)
+        .then(res => {
+            if (!res.ok) { localStorage.removeItem('janus_taskId'); return; }
+            return res.json();
+        })
+        .then(data => {
+            if (!data) return;
+            if (data.status === 'completed' || data.status === 'failed' || data.status === 'stopped') {
+                localStorage.removeItem('janus_taskId');
+                localStorage.removeItem('janus_taskUrl');
+                return;
+            }
+            // Tarea sigue activa, restaurar UI
+            currentTaskId = savedTaskId;
+            startOverlay.classList.add('hidden');
+            processingOverlay.classList.remove('hidden');
+            videoPlayer.classList.add('hidden');
+            btnNew.classList.add('hidden');
+            subtitlesViewport.innerHTML = '<p class="empty-subs-msg">Recuperando progreso del renderizado...</p>';
+            const timersSection = document.getElementById('timers-section');
+            if (timersSection) timersSection.classList.add('hidden');
+            updateStatus(data.status, data.progress);
+            requestNotificationPermission();
+            startPolling(savedTaskId);
+        })
+        .catch(() => {
+            localStorage.removeItem('janus_taskId');
+            localStorage.removeItem('janus_taskUrl');
+        });
+    }
+
     // Helper: format time in MM:SS
     function formatTime(seconds) {
         if (!seconds && seconds !== 0) return '00:00';
@@ -292,6 +327,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Reset status
         globalStatus.innerHTML = '<span class="dot"></span> Listo para doblar';
         currentTaskId = null;
+        localStorage.removeItem('janus_taskId');
+        localStorage.removeItem('janus_taskUrl');
     });
 
     // Reload models button
@@ -385,6 +422,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     btnProcess.addEventListener('click', () => {
+        // Bloquear si ya hay un renderizado activo
+        if (currentTaskId) {
+            alert('Ya hay un video renderizándose. Espera a que termine antes de iniciar otro.');
+            return;
+        }
+
         let url = '';
         if (chkUseCache.checked) {
             const cacheVal = selectCache.value;
@@ -439,6 +482,8 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(data => {
             const taskId = data.task_id;
             currentTaskId = taskId;
+            localStorage.setItem('janus_taskId', taskId);
+            localStorage.setItem('janus_taskUrl', url);
             requestNotificationPermission();
             startPolling(taskId);
         })
@@ -455,6 +500,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (pollInterval) clearInterval(pollInterval);
             const stoppingTaskId = currentTaskId;
             currentTaskId = null;
+            localStorage.removeItem('janus_taskId');
+            localStorage.removeItem('janus_taskUrl');
             
             processingOverlay.classList.add('hidden');
             startOverlay.classList.remove('hidden');
@@ -493,20 +540,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (data.status === 'completed') {
                     clearInterval(pollInterval);
+                    localStorage.removeItem('janus_taskId');
+                    localStorage.removeItem('janus_taskUrl');
                     notifyCompleted();
                     loadVideo(data.result);
                 } else if (data.status === 'failed') {
                     clearInterval(pollInterval);
+                    localStorage.removeItem('janus_taskId');
+                    localStorage.removeItem('janus_taskUrl');
+                    currentTaskId = null;
                     notifyFailed(data.error || 'Ocurrió un error desconocido.');
                     showError(data.error || 'Ocurrió un error desconocido.');
                 } else if (data.status === 'stopped') {
                     clearInterval(pollInterval);
+                    localStorage.removeItem('janus_taskId');
+                    localStorage.removeItem('janus_taskUrl');
+                    currentTaskId = null;
                     notifyFailed(data.error || 'Doblaje detenido por el usuario.');
                     showStopped(data.error || 'Doblaje detenido por el usuario.');
                 }
             })
             .catch(err => {
                 clearInterval(pollInterval);
+                localStorage.removeItem('janus_taskId');
+                localStorage.removeItem('janus_taskUrl');
+                currentTaskId = null;
                 showError(err.message);
             });
         }, 2000);
