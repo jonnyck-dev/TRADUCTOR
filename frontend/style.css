@@ -1316,30 +1316,27 @@ video {
         margin-top: auto !important;
     }
 
-    /* Dubber overlay - full screen on mobile */
+    /* Dubber overlay - contained within video area */
     .overlay-panel {
-        position: fixed !important;
-        inset: 0 !important;
-        z-index: 100 !important;
+        position: absolute !important;
     }
 
     .overlay-content {
-        padding: 32px 24px !important;
-        width: 90% !important;
-        max-width: 400px !important;
+        padding: 24px 20px !important;
+        max-width: 90% !important;
     }
 
     .overlay-content h2 {
-        font-size: 22px !important;
+        font-size: 20px !important;
     }
 
     .overlay-content p {
-        font-size: 15px !important;
+        font-size: 14px !important;
     }
 
     .url-input-container {
         flex-direction: column !important;
-        padding: 12px !important;
+        padding: 10px !important;
     }
 
     .url-input-container .icon {
@@ -1348,28 +1345,28 @@ video {
 
     .url-input-container input {
         width: 100% !important;
-        padding: 14px !important;
-        font-size: 16px !important;
+        padding: 12px !important;
+        font-size: 15px !important;
     }
 
     .url-input-container .glow-button {
         width: 100% !important;
         justify-content: center !important;
-        margin-top: 12px !important;
-        padding: 14px !important;
-        font-size: 15px !important;
+        margin-top: 10px !important;
+        padding: 12px !important;
+        font-size: 14px !important;
     }
 
     .local-upload-container .glow-button {
         width: 100% !important;
-        padding: 14px !important;
-        font-size: 15px !important;
+        padding: 12px !important;
+        font-size: 14px !important;
     }
 
     .studio-direct-action .glow-button {
         width: 100% !important;
-        padding: 14px !important;
-        font-size: 15px !important;
+        padding: 12px !important;
+        font-size: 14px !important;
     }
 
     #studio-cache-overlay h2 {
