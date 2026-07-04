@@ -1316,6 +1316,62 @@ video {
         margin-top: auto !important;
     }
 
+    /* Dubber overlay - full screen on mobile */
+    .overlay-panel {
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 100 !important;
+    }
+
+    .overlay-content {
+        padding: 32px 24px !important;
+        width: 90% !important;
+        max-width: 400px !important;
+    }
+
+    .overlay-content h2 {
+        font-size: 22px !important;
+    }
+
+    .overlay-content p {
+        font-size: 15px !important;
+    }
+
+    .url-input-container {
+        flex-direction: column !important;
+        padding: 12px !important;
+    }
+
+    .url-input-container .icon {
+        display: none !important;
+    }
+
+    .url-input-container input {
+        width: 100% !important;
+        padding: 14px !important;
+        font-size: 16px !important;
+    }
+
+    .url-input-container .glow-button {
+        width: 100% !important;
+        justify-content: center !important;
+        margin-top: 12px !important;
+        padding: 14px !important;
+        font-size: 15px !important;
+    }
+
+    .local-upload-container .glow-button {
+        width: 100% !important;
+        padding: 14px !important;
+        font-size: 15px !important;
+    }
+
+    .studio-direct-action .glow-button {
+        width: 100% !important;
+        padding: 14px !important;
+        font-size: 15px !important;
+    }
+
     #studio-cache-overlay h2 {
         font-size: 1.5rem !important;
     }
