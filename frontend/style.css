@@ -1233,6 +1233,10 @@ video {
         transition: max-height 0.3s ease, opacity 0.3s ease;
     }
 
+    .sidebar-mobile-overlay {
+        display: none !important;
+    }
+
     .sidebar.collapsed {
         max-height: 0;
         padding-top: 0;
