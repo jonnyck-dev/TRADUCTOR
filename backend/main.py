@@ -57,8 +57,8 @@ class ProcessRequest(BaseModel):
     tts_cfg: float = 2.0
     tts_steps: int = 10
     tts_mode: str = "sentence"
-    batch_size: int = 15
-    sync_size: int = 5
+    batch_size: int = 1
+    sync_size: int = 1
 
 def merge_short_chunks(chunks: list) -> list:
     """
@@ -397,7 +397,7 @@ def prepare_cloned_voice(audio_path: str, whisper_json_path: str):
         print(f"Error al preparar la voz clonada: {e}")
         traceback.print_exc()
 
-def process_translation_task(task_id: str, url: str, model: str, speaker: str, tts_model: str = None, tts_cfg: float = 2.0, tts_steps: int = 10, tts_mode: str = "sentence", batch_size: int = 15, sync_size: int = 5):
+def process_translation_task(task_id: str, url: str, model: str, speaker: str, tts_model: str = None, tts_cfg: float = 2.0, tts_steps: int = 10, tts_mode: str = "sentence", batch_size: int = 1, sync_size: int = 1):
     import time
     start_task_time = time.time()
     step_times = {}
