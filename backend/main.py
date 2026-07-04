@@ -1033,13 +1033,17 @@ def stream_video(task_id: str, request: Request):
     return StreamingResponse(file_iterator(), status_code=206, headers=headers)
 
 @app.get("/api/caches")
-def list_available_caches():
+def list_available_caches(studio: bool = False):
     valid_caches = []
     if os.path.exists(CACHE_DIR):
         for entry in os.listdir(CACHE_DIR):
             task_dir = os.path.join(CACHE_DIR, entry)
             if os.path.isdir(task_dir) and entry != "benchmark_runs":
-                valid_caches.append(entry)
+                if studio:
+                    if os.path.exists(os.path.join(task_dir, "video_dubbed.mp4")):
+                        valid_caches.append(entry)
+                else:
+                    valid_caches.append(entry)
     return {"status": "ok", "caches": valid_caches}
 
 

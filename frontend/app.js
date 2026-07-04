@@ -969,11 +969,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function loadStudioCaches() {
         if (!selectStudioCache) return;
-        fetch('/api/caches')
+        fetch('/api/caches?studio=true')
             .then(res => res.json())
             .then(data => {
                 const caches = data.caches || [];
-                selectStudioCache.innerHTML = '<option value="">Seleccionar Caché para Cargar...</option>';
+                selectStudioCache.innerHTML = caches.length === 0
+                    ? '<option value="">(Sin videos doblados — procesa uno primero)</option>'
+                    : '<option value="">Seleccionar Caché para Cargar...</option>';
                 caches.forEach(c => {
                     const option = document.createElement('option');
                     option.value = c;
