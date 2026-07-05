@@ -37,3 +37,7 @@ backend/.env
 # OS generated
 .DS_Store
 Thumbs.db
+
+# Secret scripts
+deploy.py
+activar_cloudflare.bat
