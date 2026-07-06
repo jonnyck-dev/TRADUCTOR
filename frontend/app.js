@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectModel = document.getElementById('select-model');
     const selectSpeaker = document.getElementById('select-speaker');
     const selectTtsModel = document.getElementById('select-tts-model');
+    const selectWhisperModel = document.getElementById('select-whisper-model');
     const inputTtsCfg = document.getElementById('input-tts-cfg');
     const inputTtsSteps = document.getElementById('input-tts-steps');
     const valTtsCfg = document.getElementById('val-tts-cfg');
@@ -29,6 +30,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
     const sidebar = document.querySelector('.sidebar');
     const sidebarOverlay = document.getElementById('sidebar-overlay');
+    const selectSourceLang = document.getElementById('select-source-lang');
+    const selectTargetLang = document.getElementById('select-target-lang');
 
     // Sidebar toggle for mobile
     btnToggleSidebar.addEventListener('click', () => {
@@ -114,6 +117,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
+    // Update subtitle labels when languages change
+    function updateSubtitleLabels() {
+        const sourceLabel = selectSourceLang.options[selectSourceLang.selectedIndex].text.replace(/^[^\s]+\s/, '');
+        const targetLabel = selectTargetLang.options[selectTargetLang.selectedIndex].text.replace(/^[^\s]+\s/, '');
+        btnShowOriginal.textContent = sourceLabel;
+        btnShowTranslated.textContent = targetLabel;
+    }
+
+    selectSourceLang.addEventListener('change', updateSubtitleLabels);
+    selectTargetLang.addEventListener('change', updateSubtitleLabels);
+
     const chkUseCache = document.getElementById('chk-use-cache');
     const cacheSelectWrapper = document.getElementById('cache-select-wrapper');
     const selectCache = document.getElementById('select-cache');
@@ -191,12 +205,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Toggle English/Spanish displays
+    // Toggle Source/Translated displays
     btnShowOriginal.addEventListener('click', () => {
         btnShowOriginal.classList.toggle('active');
         const lines = document.querySelectorAll('.subtitle-line');
         lines.forEach(line => {
-            line.classList.toggle('hide-eng', !btnShowOriginal.classList.contains('active'));
+            line.classList.toggle('hide-source', !btnShowOriginal.classList.contains('active'));
         });
     });
 
@@ -204,7 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnShowTranslated.classList.toggle('active');
         const lines = document.querySelectorAll('.subtitle-line');
         lines.forEach(line => {
-            line.classList.toggle('hide-esp', !btnShowTranslated.classList.contains('active'));
+            line.classList.toggle('hide-target', !btnShowTranslated.classList.contains('active'));
         });
     });
 
@@ -449,12 +463,16 @@ document.addEventListener('DOMContentLoaded', () => {
             model: selectModel.value,
             speaker: selectSpeaker.value,
             tts_model: selectTtsModel.value,
+            whisper_model: selectWhisperModel ? selectWhisperModel.value : 'large-v3-turbo',
             tts_cfg: parseFloat(inputTtsCfg.value),
             tts_steps: parseInt(inputTtsSteps.value),
             tts_mode: selectTtsMode.value,
             batch_size: parseInt(inputBatchSize.value),
-            sync_size: parseInt(inputSyncSize.value)
+            sync_size: parseInt(inputSyncSize.value),
+            source_language: selectSourceLang ? selectSourceLang.value : 'English',
+            target_language: selectTargetLang ? selectTargetLang.value : 'Spanish'
         };
+        console.log('[DEBUG] Payload:', JSON.stringify(payload, null, 2));
 
         // Reset view states
         startOverlay.classList.add('hidden');
@@ -599,7 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
             case 'transcribing':
                 processTitle.textContent = 'Transcribiendo Audio';
-                processDesc.textContent = 'Ejecutando WhisperX en inglés...';
+                processDesc.textContent = 'Ejecutando WhisperX...';
                 statusText = 'Transcribiendo...';
                 statusDotColor = '#f59e0b';
                 break;
@@ -612,14 +630,14 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'synthesizing':
                 processTitle.textContent = 'Sintetizando Voz';
                 processDesc.textContent = selectSpeaker.value === 'windows_native' 
-                    ? 'Generando audio doblado al español con TTS Nativo de Windows...' 
-                    : 'Generando audio doblado al español con el modelo de síntesis (TTS)...';
+                    ? `Generando audio doblado al ${selectTargetLang.value === 'Spanish' ? 'español' : 'inglés'} con TTS Nativo de Windows...` 
+                    : `Generando audio doblado al ${selectTargetLang.value === 'Spanish' ? 'español' : 'inglés'} con el modelo de síntesis (TTS)...`;
                 statusText = 'Generando TTS...';
                 statusDotColor = '#d946ef';
                 break;
             case 'transcribing_dub':
                 processTitle.textContent = 'Alineando Doblaje';
-                processDesc.textContent = 'Transcribiendo audio en español para obtener tiempos...';
+                processDesc.textContent = 'Transcribiendo audio doblado para obtener tiempos...';
                 statusText = 'Alineando...';
                 statusDotColor = '#ec4899';
                 break;
@@ -690,8 +708,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 subtitleData.push({
                     start: orig.timestamp[0],
                     end: orig.timestamp[1],
-                    eng: orig.text,
-                    esp: trans.text
+                    source: orig.text,
+                    target: trans.text
                 });
             }
         }
@@ -785,14 +803,14 @@ document.addEventListener('DOMContentLoaded', () => {
             line.dataset.index = index;
             
             // Apply language filter visibility classes
-            if (!btnShowOriginal.classList.contains('active')) line.classList.add('hide-eng');
-            if (!btnShowTranslated.classList.contains('active')) line.classList.add('hide-esp');
+            if (!btnShowOriginal.classList.contains('active')) line.classList.add('hide-source');
+            if (!btnShowTranslated.classList.contains('active')) line.classList.add('hide-target');
             
             line.innerHTML = `
                 <div class="timestamp">${formatTime(sub.start)}</div>
                 <div class="text-pair">
-                    <div class="text-eng">${sub.eng}</div>
-                    <div class="text-esp">${sub.esp}</div>
+                    <div class="text-source">${sub.source}</div>
+                    <div class="text-target">${sub.target}</div>
                 </div>
             `;
             
@@ -894,6 +912,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let studioActiveBlock = null;
     let studioData = null;
     const PIXELS_PER_SECOND = 40;
+    let studioSourceLanguage = 'English';
+    let studioTargetLanguage = 'Spanish';
+    const btnRetranscribeSingle = document.getElementById('btn-studio-retranscribe-single');
+    const lblTranscript = document.getElementById('lbl-transcript');
+    const selectStudioSourceLang = document.getElementById('select-studio-source-lang');
+    const selectStudioTargetLang = document.getElementById('select-studio-target-lang');
+    const selectStudioModel = document.getElementById('select-studio-model');
+    const selectStudioWhisperModel = document.getElementById('select-studio-whisper-model');
+    const btnStudioTranslate = document.getElementById('btn-studio-translate');
     
     // Range selection state for gap re-transcription
     let rangeStartPhrase = null;
@@ -911,6 +938,66 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function loadStudioModels() {
+        if (!selectStudioModel) return;
+        fetch('/api/models')
+            .then(res => res.json())
+            .then(data => {
+                const models = data.models || [];
+                selectStudioModel.innerHTML = '<option value="">(Usar modelo del inicio)</option>';
+                models.forEach(modelName => {
+                    const opt = document.createElement('option');
+                    opt.value = modelName;
+                    if (modelName.includes('cloud')) {
+                        opt.textContent = `☁️ ${modelName}`;
+                    } else if (modelName === 'gemma4:e2b-it-qat') {
+                        opt.textContent = `⭐ (Recomendado) ${modelName}`;
+                    } else {
+                        opt.textContent = modelName;
+                    }
+                    selectStudioModel.appendChild(opt);
+                });
+                // Inherit from "papá" by default
+                if (selectModel && selectModel.value) {
+                    for (let i = 0; i < selectStudioModel.options.length; i++) {
+                        if (selectStudioModel.options[i].value === selectModel.value) {
+                            selectStudioModel.selectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+            })
+            .catch(() => {
+                selectStudioModel.innerHTML = '<option value="">(Error al cargar modelos)</option>';
+            });
+    }
+
+    function fetchStudioMeta() {
+        if (!currentTaskId) return;
+        fetch(`/api/studio/${currentTaskId}/meta`)
+            .then(res => res.json())
+            .then(meta => {
+                if (meta.status === 'ok') {
+                    studioSourceLanguage = meta.source_language || 'English';
+                    studioTargetLanguage = meta.target_language || 'Spanish';
+                    updateStudioInspectorLabels();
+                }
+            })
+            .catch(() => {});
+    }
+
+    function updateStudioInspectorLabels() {
+        if (btnStudioPlayOrig) btnStudioPlayOrig.innerHTML = `<i class="fa-solid fa-ear-listen"></i> ${studioSourceLanguage}`;
+        if (btnStudioPlayDub) btnStudioPlayDub.innerHTML = `<i class="fa-solid fa-play"></i> ${studioTargetLanguage}`;
+        if (lblTranscript) lblTranscript.textContent = `TRANSCRIPT (${studioTargetLanguage})`;
+        if (selectStudioSourceLang) selectStudioSourceLang.value = studioSourceLanguage;
+        if (selectStudioTargetLang) selectStudioTargetLang.value = studioTargetLanguage;
+        const dubbedLabel = document.querySelector('.dubbed-track');
+        const origLabel = document.querySelector('.english-track');
+        if (dubbedLabel) dubbedLabel.textContent = `A1 | Doblaje (${studioTargetLanguage})`;
+        if (origLabel) origLabel.textContent = `A2 | Original (${studioSourceLanguage})`;
+    }
+
     function openStudioView() {
         homeView.classList.add('hidden');
         studioView.classList.remove('hidden');
@@ -920,6 +1007,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (navStudio) navStudio.classList.add('active');
         
         loadStudioCaches(); // Populate the top right dropdown
+        loadStudioModels(); // Load Ollama models into inspector
+        
+        // Inherit whisper model from "papá"
+        if (selectStudioWhisperModel && selectWhisperModel && selectWhisperModel.value) {
+            selectStudioWhisperModel.value = selectWhisperModel.value;
+        }
         
         const cacheOverlay = document.getElementById('studio-cache-overlay');
         
@@ -1115,6 +1208,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function loadStudioData() {
         console.log('[Studio] loadStudioData called for task:', currentTaskId);
+        fetchStudioMeta();
         fetch(`/api/studio/${currentTaskId}/data`)
             .then(res => {
                 console.log('[Studio] API response status:', res.status);
@@ -1219,7 +1313,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     const startIdx = studioActiveBlock.phrase_index;
                     const endIdx = phrase.phrase_index;
                     
-                    if (startIdx === endIdx) return;
+                    // Allow same phrase = single-phrase retranscribe
+                    if (startIdx === endIdx) {
+                        rangeStartPhrase = phrase;
+                        rangeEndPhrase = phrase;
+                        const rangePhraseDuration = phrase.end_time - phrase.start_time;
+                        rangeInfo.innerHTML = `<i class="fa-solid fa-rotate"></i> Frase #${phrase.phrase_index} [${formatTime(phrase.start_time)} → ${formatTime(phrase.end_time)}]`;
+                        rangeGapInfo.textContent = `Audio: ${rangePhraseDuration.toFixed(2)}s para re-transcribir`;
+                        document.querySelectorAll('.dubbed-block').forEach(b => b.classList.remove('selected', 'range-selected'));
+                        dubBlock.classList.add('selected');
+                        if (rangeSelectionPanel) rangeSelectionPanel.classList.remove('hidden');
+                        inspectorBlockName.innerHTML = `<i class="fa-solid fa-language" style="color: #ffa500;"></i> Re-transcribir: Frase #${phrase.phrase_index}`;
+                        return;
+                    }
                     
                     // Ensure start < end
                     if (startIdx < endIdx) {
@@ -1407,26 +1513,49 @@ document.addEventListener('DOMContentLoaded', () => {
     // Range selection: Re-transcribe button
     if (btnRetranscribe) {
         btnRetranscribe.addEventListener('click', () => {
-            if (!rangeStartPhrase || !rangeEndPhrase || !currentTaskId) {
-                alert('Selecciona un rango primero (Click en una frase, luego Shift+Click en otra).');
+            if (!currentTaskId) {
+                alert('No hay tarea cargada.');
                 return;
             }
             
-            const gapDuration = rangeEndPhrase.start_time - rangeStartPhrase.end_time;
-            if (gapDuration < 0.3) {
-                alert(`El gap entre las frases es muy pequeño (${gapDuration.toFixed(2)}s). No hay suficiente audio para re-transcribir.`);
+            // Determine mode: single phrase or range
+            const isSingle = (rangeStartPhrase === rangeEndPhrase) && rangeStartPhrase !== null;
+            const hasRange = rangeStartPhrase && rangeEndPhrase && !isSingle;
+            
+            if (!rangeStartPhrase && !studioActiveBlock) {
+                alert('Selecciona una frase primero (clic normal) o un rango (clic + Shift+clic en otra).');
                 return;
             }
             
-            btnRetranscribe.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> WhisperX analizando gap...';
+            // Fallback: if no explicit range selected, use the active block alone
+            if (!rangeStartPhrase && studioActiveBlock) {
+                rangeStartPhrase = studioActiveBlock;
+                rangeEndPhrase = studioActiveBlock;
+            }
+            
+            const startIdx = rangeStartPhrase.phrase_index;
+            const endIdx = rangeEndPhrase.phrase_index;
+            
+            const audioDuration = isSingle
+                ? rangeStartPhrase.end_time - rangeStartPhrase.start_time
+                : rangeEndPhrase.start_time - rangeStartPhrase.end_time;
+            
+            if (audioDuration < 0.3) {
+                alert(`El segmento de audio es muy corto (${audioDuration.toFixed(2)}s).`);
+                return;
+            }
+            
+            btnRetranscribe.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> WhisperX transcribiendo...';
             btnRetranscribe.disabled = true;
             
             fetch(`/api/studio/${currentTaskId}/retranscribe`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    start_phrase_index: rangeStartPhrase.phrase_index,
-                    end_phrase_index: rangeEndPhrase.phrase_index
+                    start_phrase_index: startIdx,
+                    end_phrase_index: endIdx,
+                    source_language: selectStudioSourceLang ? selectStudioSourceLang.value : 'English',
+                    whisper_model: selectStudioWhisperModel ? selectStudioWhisperModel.value : 'large-v3-turbo'
                 })
             })
             .then(res => {
@@ -1443,15 +1572,113 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadStudioData();
                 
                 setTimeout(() => {
-                    btnRetranscribe.innerHTML = '<i class="fa-solid fa-magnifying-glass-plus"></i> Re-transcribir Gap con WhisperX';
+                    btnRetranscribe.innerHTML = '<i class="fa-solid fa-magnifying-glass-plus"></i> Re-transcribir con WhisperX';
                     btnRetranscribe.disabled = false;
                 }, 3000);
             })
             .catch(err => {
                 console.error('[Studio] Retranscribe error:', err);
                 alert('Error re-transcribiendo: ' + err.message);
-                btnRetranscribe.innerHTML = '<i class="fa-solid fa-magnifying-glass-plus"></i> Re-transcribir Gap con WhisperX';
+                btnRetranscribe.innerHTML = '<i class="fa-solid fa-magnifying-glass-plus"></i> Re-transcribir con WhisperX';
                 btnRetranscribe.disabled = false;
+            });
+        });
+    }
+
+    // Single-phrase retranscribe (from inspector)
+    if (btnRetranscribeSingle) {
+        btnRetranscribeSingle.addEventListener('click', () => {
+            if (!studioActiveBlock || !currentTaskId) {
+                alert('Selecciona una frase primero.');
+                return;
+            }
+
+            const sourceLang = selectStudioSourceLang ? selectStudioSourceLang.value : 'English';
+            const phraseIdx = studioActiveBlock.phrase_index;
+
+            btnRetranscribeSingle.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> WhisperX transcribiendo...';
+            btnRetranscribeSingle.disabled = true;
+
+            fetch(`/api/studio/${currentTaskId}/retranscribe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    start_phrase_index: phraseIdx,
+                    end_phrase_index: phraseIdx,
+                    source_language: sourceLang,
+                    whisper_model: selectStudioWhisperModel ? selectStudioWhisperModel.value : 'large-v3-turbo'
+                })
+            })
+            .then(res => {
+                if (!res.ok) return res.json().then(e => { throw new Error(e.detail || 'Error del servidor'); });
+                return res.json();
+            })
+            .then(data => {
+                const newCount = data.new_phrases ? data.new_phrases.length : 0;
+                btnRetranscribeSingle.innerHTML = `<i class="fa-solid fa-check"></i> ¡${newCount} frase(s) encontrada(s)!`;
+                loadStudioData();
+                setTimeout(() => {
+                    btnRetranscribeSingle.innerHTML = '<i class="fa-solid fa-magnifying-glass-plus"></i> Re-transcribir con WhisperX';
+                    btnRetranscribeSingle.disabled = false;
+                }, 3000);
+            })
+            .catch(err => {
+                console.error('[Studio] Single retranscribe error:', err);
+                alert('Error re-transcribiendo: ' + err.message);
+                btnRetranscribeSingle.innerHTML = '<i class="fa-solid fa-magnifying-glass-plus"></i> Re-transcribir con WhisperX';
+                btnRetranscribeSingle.disabled = false;
+            });
+        });
+    }
+
+    // Translate single phrase with AI (from inspector)
+    if (btnStudioTranslate) {
+        btnStudioTranslate.addEventListener('click', () => {
+            if (!studioActiveBlock || !currentTaskId) {
+                alert('Selecciona una frase primero.');
+                return;
+            }
+
+            const sourceLang = selectStudioSourceLang ? selectStudioSourceLang.value : 'English';
+            const targetLang = selectStudioTargetLang ? selectStudioTargetLang.value : 'Spanish';
+            const model = selectStudioModel && selectStudioModel.value ? selectStudioModel.value : (selectModel ? selectModel.value : 'gemma4:e2b-it-qat');
+            const phraseIdx = studioActiveBlock.phrase_index;
+
+            btnStudioTranslate.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Traduciendo...';
+            btnStudioTranslate.disabled = true;
+
+            fetch(`/api/studio/${currentTaskId}/translate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phrase_index: phraseIdx,
+                    source_language: sourceLang,
+                    target_language: targetLang,
+                    model: model,
+                    whisper_model: selectStudioWhisperModel ? selectStudioWhisperModel.value : 'large-v3-turbo'
+                })
+            })
+            .then(res => {
+                if (!res.ok) return res.json().then(e => { throw new Error(e.detail || 'Error del servidor'); });
+                return res.json();
+            })
+            .then(data => {
+                btnStudioTranslate.innerHTML = `<i class="fa-solid fa-check"></i> ¡Traducido!`;
+                // Update textarea with translated text
+                if (studioTextarea) studioTextarea.value = data.translated_text;
+                studioActiveBlock.text = data.translated_text;
+                // Reload studio data to update timeline
+                loadStudioData();
+                setTimeout(() => {
+                    btnStudioTranslate.innerHTML = '<i class="fa-solid fa-language"></i> Traducir con IA';
+                    btnStudioTranslate.disabled = false;
+                }, 3000);
+            })
+            .catch(err => {
+                console.error('[Studio] Translate error:', err);
+                alert('Error traduciendo: ' + err.message);
+                btnStudioTranslate.innerHTML = '<i class="fa-solid fa-language"></i> Traducir con IA';
+                btnStudioTranslate.disabled = false;
             });
         });
     }

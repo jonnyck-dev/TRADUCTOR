@@ -599,7 +599,7 @@ def mix_voice_and_background(vocals_path: str, background_path: str, output_path
     print(f"Professional dubbed audio mixed and saved to: {output_path}")
     return output_path
 
-def split_batch_audio_with_whisperx(batch_mp3_path: str, original_chunks: list, output_dir: str) -> list:
+def split_batch_audio_with_whisperx(batch_mp3_path: str, original_chunks: list, output_dir: str, target_language: str = "spanish") -> list:
     """
     Takes a single MP3 containing multiple spoken sentences, runs WhisperX to get word-level timestamps,
     and slices the MP3 into individual audio files corresponding to original_chunks.
@@ -614,7 +614,7 @@ def split_batch_audio_with_whisperx(batch_mp3_path: str, original_chunks: list, 
     json_path = os.path.join(output_dir, f"{audio_name_no_ext}_align.json")
     
     try:
-        wx_data = transcribe_audio(batch_mp3_path, json_path, language="es", model_name="tiny")
+        wx_data = transcribe_audio(batch_mp3_path, json_path, language=target_language, model_name="tiny")
     except Exception as e:
         print(f"WhisperX alignment failed on {batch_mp3_path}: {e}")
         return proportional_split(batch_mp3_path, original_chunks, output_dir)
@@ -697,7 +697,7 @@ def proportional_split(batch_mp3_path: str, original_chunks: list, output_dir: s
         
     return sliced_paths
 
-def process_super_audio_with_whisperx(mp3_paths: list, original_chunks: list, sync_size: int, output_dir: str) -> tuple:
+def process_super_audio_with_whisperx(mp3_paths: list, original_chunks: list, sync_size: int, output_dir: str, target_language: str = "spanish") -> tuple:
     """
     1. Concatenates all generated MP3s into a single super-audio file with 1.5s silence between them.
     2. Runs WhisperX once on the super-audio.
@@ -728,7 +728,7 @@ def process_super_audio_with_whisperx(mp3_paths: list, original_chunks: list, sy
     # 2. Run WhisperX
     json_path = os.path.join(output_dir, "super_audio_align.json")
     try:
-        wx_data = transcribe_audio(super_audio_path, json_path, language="es", model_name="tiny")
+        wx_data = transcribe_audio(super_audio_path, json_path, language=target_language, model_name="tiny")
     except Exception as e:
         print(f"WhisperX alignment failed on super_audio: {e}")
         wx_data = {"chunks": []}

@@ -43,11 +43,22 @@
 - Devuelve el archivo (con cache-busting)
 
 ### POST /api/studio/{task_id}/reprocess
-- Recibe `{ phrase_index, text, speaker, vibevoice_model, cfg, steps }`
+- Recibe `{ phrase_index, text, speaker, tts_model, tts_cfg, tts_steps }`
 - Actualiza `spanish_enhanced.json` → `data["chunks"][req.phrase_index]["text"]`
 - Recorta vocal de referencia de `vocals.wav`
-- Llama al TTS server en `http://127.0.0.1:8001/api/tts`
+- Llama al TTS server
 - Guarda nuevo `phrase_{phrase_index}.wav`
+
+### POST /api/studio/{task_id}/translate
+- Recibe `{ phrase_index, source_language, target_language, model }`
+- Lee el chunk actual del JSON script
+- Ejecuta pipeline completo de traducción para UNA frase:
+  - `translate_chunks()` → Ollama one-shot
+  - `enhance_translation_for_tts()` → Sanador IA (si target=spanish)
+  - `phonetic_normalization_for_tts()` → Fonética (si target=spanish)
+  - `synchronize_translation_for_tts()` → Reductor IA (si target=spanish)
+- Salva `orig_text` (texto original) y `text` (traducido) en el chunk
+- Devuelve `{ status, phrase_index, translated_text, original_text }`
 
 ### POST /api/studio/{task_id}/finalize
 - Limpia outputs anteriores

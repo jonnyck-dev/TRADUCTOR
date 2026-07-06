@@ -26,7 +26,7 @@ from audio_processor import sync_individual_phrases, merge_audio_video, run_demu
 import re
 import math
 
-app = FastAPI(title="Video Translator & Dubber API")
+app = FastAPI(title="JANUS Dubber API v4.0")
 
 # Enable CORS for development
 app.add_middleware(
@@ -54,16 +54,29 @@ class ProcessRequest(BaseModel):
     model: str = "gemma4:e2b-it-qat"
     speaker: str = "en-Frank_man"
     tts_model: str = "openbmb/VoxCPM2"
+    whisper_model: str = "large-v3-turbo"
     tts_cfg: float = 2.0
     tts_steps: int = 10
     tts_mode: str = "sentence"
     batch_size: int = 1
     sync_size: int = 1
+    source_language: str = "English"
+    target_language: str = "Spanish"
 
-def merge_short_chunks(chunks: list) -> list:
+def is_cjk_language(lang: str) -> bool:
+    return lang.lower() in ("japanese", "chinese", "korean", "ja", "zh", "ko")
+
+def is_short_chunk(text: str, duration: float, is_cjk: bool) -> bool:
+    if duration < 0.4:
+        return True
+    if is_cjk:
+        return len(text.strip()) <= 3
+    return len(text.strip().split()) <= 1
+
+def merge_short_chunks(chunks: list, source_language: str = "English") -> list:
     """
-    Merges very short chunks (e.g., duration < 0.8s or <= 2 words) with the next chunk
-    to prevent TTS engine failures on monosyllables.
+    Merges very short chunks with the next chunk to prevent TTS failures.
+    For CJK languages (ja, zh, ko), uses character count instead of word count.
     """
     if not chunks:
         return []
@@ -79,15 +92,14 @@ def merge_short_chunks(chunks: list) -> list:
         ts = current_chunk.get("timestamp", [0.0, 0.0])
         start, end = ts[0], ts[1]
         duration = end - start
-        word_count = len(current_chunk.get("text", "").strip().split())
+        text = current_chunk.get("text", "").strip()
+        cjk = is_cjk_language(source_language)
         
         next_ts = chunk.get("timestamp", [0.0, 0.0])
         gap = next_ts[0] - end
         
-        # Merge if it's a single word (monosyllable), extremely short (< 0.4s), OR gap is tiny (< 0.15s)
-        # Added a max duration safety of 15.0s to prevent creating infinite chunks if a person speaks extremely fast continuously.
-        if duration < 0.4 or word_count <= 1 or (gap < 0.15 and duration < 15.0):
-            print(f"Merging chunk: '{current_chunk.get('text', '').strip()}' (Dur: {duration:.2f}s, Gap: {gap:.2f}s) into next chunk.")
+        if is_short_chunk(text, duration, cjk) or (gap < 0.15 and duration < 15.0):
+            print(f"Merging chunk: '{text}' (Dur: {duration:.2f}s, Gap: {gap:.2f}s) into next chunk.")
             
             # Combine text (Removing trailing punctuation from the first chunk to avoid confusing the translator)
             import re
@@ -204,7 +216,7 @@ def normalize_text(text: str) -> str:
     text = " ".join(text.split())
     return text
 
-def download_and_extract(url: str, output_dir: str) -> tuple[str, str]:
+def download_and_extract(url: str, output_dir: str, source_language: str = "English", target_language: str = "Spanish") -> tuple[str, str]:
     downloads_dir = os.path.join(output_dir, "downloads")
     os.makedirs(downloads_dir, exist_ok=True)
     
@@ -232,7 +244,7 @@ def download_and_extract(url: str, output_dir: str) -> tuple[str, str]:
             # Organize whisper folder if files are at root level
             whisper_dir = os.path.join(source_dir, "whisper")
             os.makedirs(whisper_dir, exist_ok=True)
-            for filename in ["english_whisper.json", "spanish_translated.json", "spanish_whisper.json", "verification_report.json"]:
+            for filename in [f"{source_language.lower()}_whisper.json", f"{target_language.lower()}_translated.json", f"{target_language.lower()}_whisper.json", "verification_report.json"]:
                 root_file = os.path.join(source_dir, filename)
                 sub_file = os.path.join(whisper_dir, filename)
                 if os.path.exists(root_file) and not os.path.exists(sub_file):
@@ -242,7 +254,17 @@ def download_and_extract(url: str, output_dir: str) -> tuple[str, str]:
                         print(f"Moved {filename} to whisper/ directory.")
                     except Exception as e:
                         print(f"Failed to move {filename}: {e}")
-                        
+            # Backward compat: try old names
+            for old_name in ["english_whisper.json", "spanish_translated.json", "spanish_whisper.json"]:
+                old_root = os.path.join(source_dir, old_name)
+                old_sub = os.path.join(whisper_dir, old_name)
+                if os.path.exists(old_root) and not os.path.exists(old_sub):
+                    try:
+                        import shutil
+                        shutil.move(old_root, old_sub)
+                        print(f"Moved {old_name} to whisper/ directory.")
+                    except Exception as e:
+                        print(f"Failed to move {old_name}: {e}")
             if os.path.exists(video_path) and os.path.exists(audio_path):
                 return video_path, audio_path
             else:
@@ -268,7 +290,7 @@ def download_and_extract(url: str, output_dir: str) -> tuple[str, str]:
                 # Copy cached translations/whisper files if available to skip those phases
                 whisper_dir = os.path.join(output_dir, "whisper")
                 os.makedirs(whisper_dir, exist_ok=True)
-                for filename in ["english_whisper.json", "spanish_translated.json", "spanish_whisper.json", "verification_report.json"]:
+                for filename in [f"{source_language.lower()}_whisper.json", f"{target_language.lower()}_translated.json", f"{target_language.lower()}_whisper.json", "verification_report.json"]:
                     src = os.path.join(source_dir, "whisper", filename)
                     if not os.path.exists(src):
                         src = os.path.join(source_dir, filename)
@@ -279,6 +301,18 @@ def download_and_extract(url: str, output_dir: str) -> tuple[str, str]:
                             print(f"Cached {filename} copied to whisper/ directory.")
                         except Exception as e:
                             print(f"Failed to copy cached {filename}: {e}")
+                # Backward compat: try old names
+                for old_name in ["english_whisper.json", "spanish_translated.json", "spanish_whisper.json"]:
+                    old_src = os.path.join(source_dir, "whisper", old_name)
+                    if not os.path.exists(old_src):
+                        old_src = os.path.join(source_dir, old_name)
+                    old_dst = os.path.join(whisper_dir, old_name)
+                    if os.path.exists(old_src) and not os.path.exists(old_dst):
+                        try:
+                            shutil.copy(old_src, old_dst)
+                            print(f"Cached {old_name} copied to whisper/ directory.")
+                        except Exception as e:
+                            print(f"Failed to copy cached {old_name}: {e}")
                             
                 # Copy tts cache if present
                 tts_src_dir = os.path.join(source_dir, "tts")
@@ -397,7 +431,7 @@ def prepare_cloned_voice(audio_path: str, whisper_json_path: str):
         print(f"Error al preparar la voz clonada: {e}")
         traceback.print_exc()
 
-def process_translation_task(task_id: str, url: str, model: str, speaker: str, tts_model: str = None, tts_cfg: float = 2.0, tts_steps: int = 10, tts_mode: str = "sentence", batch_size: int = 1, sync_size: int = 1):
+def process_translation_task(task_id: str, url: str, model: str, speaker: str, tts_model: str = None, whisper_model: str = "large-v3-turbo", tts_cfg: float = 2.0, tts_steps: int = 10, tts_mode: str = "sentence", batch_size: int = 1, sync_size: int = 1, source_language: str = "English", target_language: str = "Spanish"):
     import time
     start_task_time = time.time()
     step_times = {}
@@ -421,7 +455,7 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, t
         t0 = time.time()
         tasks[task_id]["status"] = "downloading"
         tasks[task_id]["progress"] = 15
-        video_path, audio_path = download_and_extract(url, output_dir)
+        video_path, audio_path = download_and_extract(url, output_dir, source_language=source_language, target_language=target_language)
         step_times["1_download_and_extract"] = time.time() - t0
         
         # 1b. Run Demucs separation to get vocals.wav and no_vocals.wav (with fallback)
@@ -439,33 +473,35 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, t
         t0 = time.time()
         tasks[task_id]["status"] = "transcribing"
         tasks[task_id]["progress"] = 35
-        orig_json_path = os.path.join(whisper_dir, "english_whisper.json")
+        orig_json_path = os.path.join(whisper_dir, f"{source_language.lower()}_whisper.json")
         if os.path.exists(orig_json_path):
             print(f"Skipping transcription, using cached: {orig_json_path}")
             with open(orig_json_path, 'r', encoding='utf-8') as f:
                 orig_data = json.load(f)
         else:
             # Transcribe the clean vocals track to prevent hallucinations caused by background noise
-            orig_data = transcribe_audio(vocals_wav_path, orig_json_path, language="English")
+            print(f"[DEBUG] source_language={source_language}, target_language={target_language}")
+            orig_data = transcribe_audio(vocals_wav_path, orig_json_path, language=source_language, model_name=whisper_model)
         step_times["2_transcription"] = time.time() - t0
             
         # 2b. Preprocess Chunks (split segments exceeding 120s duration, merge short ones)
         orig_chunks = orig_data.get("chunks", [])
-        preprocessed_chunks = merge_short_chunks(orig_chunks)
+        preprocessed_chunks = merge_short_chunks(orig_chunks, source_language=source_language)
         preprocessed_chunks = preprocess_chunks(preprocessed_chunks)
         
         # 3. Translate JSON to Spanish using Ollama
         t0 = time.time()
         tasks[task_id]["status"] = "translating"
         tasks[task_id]["progress"] = 55
-        translated_json_path = os.path.join(whisper_dir, "spanish_1_translated.json")
-        enhanced_json_path = os.path.join(whisper_dir, "spanish_2_enhanced.json")
-        phonetic_json_path = os.path.join(whisper_dir, "spanish_3_phonetic.json")
-        final_json_path = os.path.join(whisper_dir, "spanish_4_final.json")
+        translated_json_path = os.path.join(whisper_dir, f"{target_language.lower()}_1_translated.json")
+        enhanced_json_path = os.path.join(whisper_dir, f"{target_language.lower()}_2_enhanced.json")
+        phonetic_json_path = os.path.join(whisper_dir, f"{target_language.lower()}_3_phonetic.json")
+        final_json_path = os.path.join(whisper_dir, f"{target_language.lower()}_4_final.json")
         
         # Retro-compatibility checks (if old cached files exist)
         cache_to_load = None
         if os.path.exists(final_json_path): cache_to_load = final_json_path
+        elif os.path.exists(os.path.join(whisper_dir, f"{target_language.lower()}_enhanced.json")): cache_to_load = os.path.join(whisper_dir, f"{target_language.lower()}_enhanced.json")
         elif os.path.exists(os.path.join(whisper_dir, "spanish_enhanced.json")): cache_to_load = os.path.join(whisper_dir, "spanish_enhanced.json")
         
         if cache_to_load:
@@ -481,7 +517,7 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, t
                 raw_translated_chunks = raw_data.get("chunks", [])
             else:
                 from translator import translate_chunks
-                raw_translated_chunks = translate_chunks(preprocessed_chunks, model=model, save_dir=whisper_dir)
+                raw_translated_chunks = translate_chunks(preprocessed_chunks, model=model, save_dir=whisper_dir, source_language=source_language, target_language=target_language)
                 raw_data = {
                     "text": " ".join([c.get("text", "") for c in raw_translated_chunks]),
                     "chunks": raw_translated_chunks
@@ -489,20 +525,21 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, t
                 with open(translated_json_path, "w", encoding="utf-8") as f:
                     json.dump(raw_data, f, ensure_ascii=False, indent=2)
             
-            # 3b. Sanitize and enhance translation for TTS (Anti-Collapse)
+            # 3b-3d. Post-processing pipeline (only for Spanish target)
             from translator import enhance_translation_for_tts, phonetic_normalization_for_tts, synchronize_translation_for_tts
             
-            enhanced_chunks = enhance_translation_for_tts(raw_translated_chunks, model=model)
-            with open(enhanced_json_path, "w", encoding="utf-8") as f:
-                json.dump({"chunks": enhanced_chunks}, f, ensure_ascii=False, indent=2)
-            
-            # 3c. Phonetic Normalization (Anti-Gringo Accent)
-            phonetic_chunks = phonetic_normalization_for_tts(enhanced_chunks, model=model)
-            with open(phonetic_json_path, "w", encoding="utf-8") as f:
-                json.dump({"chunks": phonetic_chunks}, f, ensure_ascii=False, indent=2)
-            
-            # 3d. Math Sync: Ensure words fit in their allotted timestamp
-            translated_chunks = synchronize_translation_for_tts(phonetic_chunks, model=model)
+            if target_language.lower() == "spanish":
+                enhanced_chunks = enhance_translation_for_tts(raw_translated_chunks, model=model)
+                with open(enhanced_json_path, "w", encoding="utf-8") as f:
+                    json.dump({"chunks": enhanced_chunks}, f, ensure_ascii=False, indent=2)
+                
+                phonetic_chunks = phonetic_normalization_for_tts(enhanced_chunks, model=model)
+                with open(phonetic_json_path, "w", encoding="utf-8") as f:
+                    json.dump({"chunks": phonetic_chunks}, f, ensure_ascii=False, indent=2)
+                
+                translated_chunks = synchronize_translation_for_tts(phonetic_chunks, model=model)
+            else:
+                translated_chunks = raw_translated_chunks
             
             translated_data = {
                 "text": " ".join([c.get("text", "") for c in translated_chunks]),
@@ -622,7 +659,7 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, t
                 from audio_processor import process_super_audio_with_whisperx
                 
                 sliced_mp3s, final_sync_chunks = process_super_audio_with_whisperx(
-                    mp3_paths, translated_chunks, sync_size, tts_dir
+                    mp3_paths, translated_chunks, sync_size, tts_dir, target_language=target_language
                 )
                 
                 tts_chunks_for_sync = final_sync_chunks
@@ -718,8 +755,8 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, t
             tasks[task_id]["progress"] = 95
             print("Starting QA Verification...")
             
-            verification_json_path = os.path.join(whisper_dir, "spanish_whisper_verification.json")
-            verification_data = transcribe_audio(synced_wav_path, verification_json_path, language="Spanish")
+            verification_json_path = os.path.join(whisper_dir, f"{target_language.lower()}_whisper_verification.json")
+            verification_data = transcribe_audio(synced_wav_path, verification_json_path, language=target_language, model_name=whisper_model)
             
             expected_text = translated_data.get("text", "").strip()
             actual_text = verification_data.get("text", "").strip()
@@ -786,6 +823,21 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, t
         
         # 8. Finished
         tasks[task_id]["status"] = "completed"
+        
+        # Save task language metadata for Studio Editor
+        meta_path = os.path.join(output_dir, "task_meta.json")
+        try:
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump({
+                    "source_language": source_language,
+                    "target_language": target_language,
+                    "model": model,
+                    "tts_model": tts_model,
+                    "speaker": speaker
+                }, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"Warning: Failed to save task_meta.json: {e}")
+        
         tasks[task_id]["progress"] = 100
         tasks[task_id]["result"] = {
             "video_url": f"/api/stream/{task_id}?t={int(time.time())}",
@@ -874,11 +926,14 @@ def process_video(request: ProcessRequest, background_tasks: BackgroundTasks):
         request.model,
         request.speaker,
         request.tts_model,
+        request.whisper_model,
         request.tts_cfg,
         request.tts_steps,
         request.tts_mode,
         request.batch_size,
-        request.sync_size
+        request.sync_size,
+        request.source_language,
+        request.target_language
     )
     return {"task_id": task_id}
 
@@ -1061,13 +1116,42 @@ class ReprocessRequest(BaseModel):
     tts_cfg: float
     tts_steps: int
 
-def get_latest_script_path(task_id: str):
+def get_latest_script_path(task_id: str, target_language: str = None):
     whisper_dir = os.path.join(CACHE_DIR, task_id, "whisper")
+    
+    # Auto-detect target_language from task_meta.json if not provided
+    if target_language is None:
+        meta_path = os.path.join(CACHE_DIR, task_id, "task_meta.json")
+        if os.path.exists(meta_path):
+            try:
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                target_language = meta.get("target_language", "spanish")
+            except:
+                target_language = "spanish"
+        else:
+            target_language = "spanish"
+    
+    for p in [f"{target_language.lower()}_4_final.json", f"{target_language.lower()}_enhanced.json", f"{target_language.lower()}_translated.json"]:
+        full_path = os.path.join(whisper_dir, p)
+        if os.path.exists(full_path):
+            return full_path
     for p in ["spanish_4_final.json", "spanish_enhanced.json", "spanish_translated.json"]:
         full_path = os.path.join(whisper_dir, p)
         if os.path.exists(full_path):
             return full_path
     return None
+
+@app.get("/api/studio/{task_id}/meta")
+def get_studio_meta(task_id: str):
+    """Returns source_language and target_language used for this task."""
+    meta_path = os.path.join(CACHE_DIR, task_id, "task_meta.json")
+    if os.path.exists(meta_path):
+        with open(meta_path, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+        return {"status": "ok", "source_language": meta.get("source_language", "English"), "target_language": meta.get("target_language", "Spanish")}
+    # Backward compat: no meta file, defaults
+    return {"status": "ok", "source_language": "English", "target_language": "Spanish", "note": "No task_meta.json found, using defaults"}
 
 @app.get("/api/studio/{task_id}/data")
 def get_studio_data(task_id: str):
@@ -1091,7 +1175,19 @@ def get_studio_data(task_id: str):
                 "start_time": ts[0],
                 "end_time": ts[1]
             })
-    return {"status": "ok", "phrases": phrases}
+    meta_path = os.path.join(CACHE_DIR, task_id, "task_meta.json")
+    source_lang = "English"
+    target_lang = "Spanish"
+    if os.path.exists(meta_path):
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            source_lang = meta.get("source_language", "English")
+            target_lang = meta.get("target_language", "Spanish")
+        except:
+            pass
+
+    return {"status": "ok", "phrases": phrases, "source_language": source_lang, "target_language": target_lang}
 
 @app.get("/api/studio/{task_id}/audio/original")
 def get_original_audio_slice(task_id: str, start: float, end: float):
@@ -1208,13 +1304,23 @@ def reprocess_studio_block(task_id: str, req: ReprocessRequest):
 class RetranscribeRequest(BaseModel):
     start_phrase_index: int
     end_phrase_index: int
+    source_language: str = "English"
+    whisper_model: str = "large-v3-turbo"
+
+class TranslateRequest(BaseModel):
+    phrase_index: int
+    source_language: str = "English"
+    target_language: str = "Spanish"
+    model: str = "gemma4:e2b-it-qat"
+    whisper_model: str = "large-v3-turbo"
 
 @app.post("/api/studio/{task_id}/retranscribe")
 def retranscribe_studio_gap(task_id: str, req: RetranscribeRequest):
     """
-    Extracts the audio between start_phrase_index and end_phrase_index,
-    transcribes it with WhisperX, and inserts the new phrases back into the JSON script.
-    It then re-indexes all remaining phrase_N.mp3 audio files to match their new offsets.
+    Re-transcribes audio using WhisperX.
+    - Single phrase (start == end): re-transcribes that phrase's audio range.
+    - Range (start < end): re-transcribes the gap between two phrases.
+    Inserts new phrases and re-indexes TTS audio files.
     """
     from audio_processor import get_flat_timestamp
     from whisper_client import transcribe_audio
@@ -1233,20 +1339,34 @@ def retranscribe_studio_gap(task_id: str, req: RetranscribeRequest):
     if not chunks:
         raise HTTPException(status_code=400, detail="JSON script is empty or has no chunks")
         
-    if req.start_phrase_index < 0 or req.end_phrase_index >= len(chunks) or req.start_phrase_index >= req.end_phrase_index:
-        raise HTTPException(status_code=400, detail="Invalid phrase indices or range")
+    if req.start_phrase_index < 0 or req.end_phrase_index < 0:
+        raise HTTPException(status_code=400, detail="Invalid phrase indices")
+    if req.start_phrase_index >= len(chunks) or req.end_phrase_index >= len(chunks):
+        raise HTTPException(status_code=400, detail="Phrase index out of range")
         
-    chunk_a = chunks[req.start_phrase_index]
-    chunk_b = chunks[req.end_phrase_index]
+    is_single = (req.start_phrase_index == req.end_phrase_index)
     
-    ts_a = get_flat_timestamp(chunk_a.get("timestamp", [0.0, 0.0]))
-    ts_b = get_flat_timestamp(chunk_b.get("timestamp", [0.0, 0.0]))
-    
-    gap_start = ts_a[1] # End of first phrase
-    gap_end = ts_b[0] # Start of second phrase
+    if is_single:
+        # Single phrase: re-transcribe that phrase's audio range
+        chunk = chunks[req.start_phrase_index]
+        ts = get_flat_timestamp(chunk.get("timestamp", [0.0, 0.0]))
+        gap_start = ts[0]
+        gap_end = ts[1]
+        insert_index = req.start_phrase_index + 1  # insert new phrases AFTER this one
+    else:
+        # Range: re-transcribe gap between two phrases
+        if req.start_phrase_index >= req.end_phrase_index:
+            raise HTTPException(status_code=400, detail="start_phrase_index must be < end_phrase_index for gap mode")
+        chunk_a = chunks[req.start_phrase_index]
+        chunk_b = chunks[req.end_phrase_index]
+        ts_a = get_flat_timestamp(chunk_a.get("timestamp", [0.0, 0.0]))
+        ts_b = get_flat_timestamp(chunk_b.get("timestamp", [0.0, 0.0]))
+        gap_start = ts_a[1]
+        gap_end = ts_b[0]
+        insert_index = req.start_phrase_index + 1
     
     if gap_end - gap_start < 0.3:
-        raise HTTPException(status_code=400, detail=f"Gap is too small ({gap_end - gap_start:.2f}s). No audio to transcribe.")
+        raise HTTPException(status_code=400, detail=f"Audio segment is too small ({gap_end - gap_start:.2f}s). No audio to transcribe.")
         
     # Check audio source path (default to vocals, fallback to downloads/video.mp4 audio extraction)
     vocals_path = os.path.join(CACHE_DIR, task_id, "demucs", "htdemucs", "audio", "vocals.wav")
@@ -1280,7 +1400,7 @@ def retranscribe_studio_gap(task_id: str, req: RetranscribeRequest):
     # Transcribe sliced audio
     try:
         # Transcribe original (English) gap audio
-        transcript_res = transcribe_audio(gap_audio_path, gap_json_path, language="English")
+        transcript_res = transcribe_audio(gap_audio_path, gap_json_path, language=req.source_language, model_name=req.whisper_model)
         new_chunks = transcript_res.get("chunks", [])
     except Exception as e:
         if os.path.exists(gap_audio_path):
@@ -1373,6 +1493,76 @@ def retranscribe_studio_gap(task_id: str, req: RetranscribeRequest):
         "status": "ok",
         "new_phrases": adjusted_chunks,
         "total_phrases": len(data["chunks"])
+    }
+
+@app.post("/api/studio/{task_id}/translate")
+def translate_studio_phrase(task_id: str, req: TranslateRequest):
+    """
+    Translates a single phrase from source_language to target_language using Ollama.
+    Runs the full AI pipeline: translate → sanitize → phonetic → sync.
+    Updates the JSON script with the translated text.
+    """
+    from translator import translate_chunks, enhance_translation_for_tts, phonetic_normalization_for_tts, synchronize_translation_for_tts
+    import json
+
+    enhanced_json = get_latest_script_path(task_id)
+    if not enhanced_json:
+        raise HTTPException(status_code=404, detail="Cache script not found")
+
+    with open(enhanced_json, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    chunks = data.get("chunks", [])
+    if req.phrase_index >= len(chunks):
+        raise HTTPException(status_code=400, detail="Invalid phrase_index out of range")
+
+    target_chunk = chunks[req.phrase_index]
+    orig_text = target_chunk.get("text", "")
+    if not orig_text.strip():
+        raise HTTPException(status_code=400, detail="Phrase has no text to translate")
+
+    whisper_dir = os.path.join(CACHE_DIR, task_id, "whisper")
+    os.makedirs(whisper_dir, exist_ok=True)
+
+    # Build a single-chunk list for the translation pipeline
+    single_chunk = [{
+        "text": orig_text,
+        "timestamp": target_chunk.get("timestamp", [0.0, 0.0])
+    }]
+
+    # 1. Translate
+    raw_translated = translate_chunks(
+        single_chunk,
+        model=req.model,
+        save_dir=whisper_dir,
+        source_language=req.source_language,
+        target_language=req.target_language
+    )
+
+    # 2. Post-processing pipeline (only for Spanish target)
+    if req.target_language.lower() == "spanish":
+        enhanced = enhance_translation_for_tts(raw_translated, model=req.model)
+        phonetic = phonetic_normalization_for_tts(enhanced, model=req.model)
+        final_chunks = synchronize_translation_for_tts(phonetic, model=req.model)
+    else:
+        final_chunks = raw_translated
+
+    translated_text = final_chunks[0].get("text", orig_text)
+
+    # Update the chunk in the JSON script
+    data["chunks"][req.phrase_index]["text"] = translated_text
+    data["chunks"][req.phrase_index]["orig_text"] = orig_text
+
+    with open(enhanced_json, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    return {
+        "status": "ok",
+        "phrase_index": req.phrase_index,
+        "translated_text": translated_text,
+        "original_text": orig_text,
+        "source_language": req.source_language,
+        "target_language": req.target_language
     }
 
 @app.post("/api/studio/{task_id}/delete/{phrase_index}")

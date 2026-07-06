@@ -64,7 +64,7 @@ Este proyecto es una aplicación web local que automatiza el proceso de traducci
 ### 2. Creación del Servidor FastAPI de VoxCPM (`backend/voxcpm_server.py`) (Pendiente)
 - **Problema**: Necesitamos un backend persistente para cargar el modelo VoxCPM2 en VRAM y responder consultas rápidamente sin el overhead de re-inicialización en cada frase.
 - **Solución**:
-  - Crear [backend/VoxCPM/voxcpm_server.py](file:///mnt/g/IA/PROYECTOS/Traductor/backend/VoxCPM/voxcpm_server.py) exponiendo un endpoint `/api/tts` y un endpoint `/shutdown`.
+  - Crear `backend/VoxCPM/voxcpm_server.py` exponiendo un endpoint `/api/tts` y un endpoint `/shutdown`.
   - El servidor cargará `openbmb/VoxCPM2` con soporte CUDA, `load_denoiser=False` y en `torch.bfloat16` para optimizar memoria.
   - Implementar un mutex de concurrencia (`with lock:`) para proteger la generación del modelo, asegurando la seguridad de hilos en PyTorch a nivel de proceso único.
   - Liberar la memoria de la GPU tras cada generación mediante `torch.cuda.empty_cache()` para mantener el consumo general bajo el límite estricto de **10 GB de VRAM**.
@@ -114,7 +114,7 @@ Proyecto completamente portable: sin rutas absolutas, con setup automatizado que
 | 1 | Eliminar archivos de test/depuración | `split_and_translate.py`, `fix_task.py`, `test_translation.py`, `test_multi_server.py`, `batch_tts_test.py`, `run_benchmark.py`, `setup_symlinks.bat`, `server_debug.log` | ✅ Eliminados |
 | 2 | `.gitignore` actualizado | `.gitignore` — ignora venvs subproyectos, logs, modelos, `.env` | ✅ |
 | 3 | Fix `audio_processor.py` | `get_ffmpeg_cmd()` → usa `ffmpeg` del PATH o `$FFMPEG_PATH` del `.env` | ✅ |
-| 4 | Fix `whisper_client.py` | Ruta absoluta `C:\users\jpzam\...` → ruta relativa `backend/vibevoice/env_vibevoice/...` | ✅ |
+| 4 | Fix `whisper_client.py` | Ruta absoluta de Windows → ruta relativa `backend/vibevoice/env_vibevoice/...` | ✅ |
 | 5 | Migrar naming `vibevoice_*` → `tts_*` | `backend/main.py`, `tts_client.py`, `frontend/`, `frontend_studio/` | ✅ |
 | 6 | Soporte `.env` | `.env.example` + `python-dotenv` en `requirements.txt` | ✅ |
 | 7 | Scripts de setup portable | `setup_env.bat` (Windows) + `setup.sh` (Linux/WSL) | ✅ |
@@ -144,6 +144,135 @@ Proyecto completamente portable: sin rutas absolutas, con setup automatizado que
 | `FFMPEG_PATH` | `ffmpeg` (PATH) | Ruta al ejecutable de ffmpeg |
 | `OLLAMA_HOST` | `localhost:11434` | URL de la API de Ollama |
 | `HF_HOME` | (default HF) | Directorio de caché de Hugging Face |
+
+---
+
+---
+
+## 🚀 VERSION 4.0: Selector de Idioma Multi-Fuente
+
+### Objetivo
+Generalizar el pipeline actual, hardcodeado como English→Spanish, para que acepte cualquier idioma como fuente (source) y Español o Inglés como destino (target).
+
+### Arquitectura
+
+```
+[Source Language ▼]  ───→  WhisperX(language=source)
+        │
+        ▼
+Ollama: "XX → Target" translator
+        │
+        ├── Target = Español ──→ enhance → phonetic → sync → VoxCPM → QA(es)
+        │
+        └── Target = English ──→ VoxCPM directo → QA(en)
+```
+
+### Principios clave
+- **VoxCPM siempre genera audio en inglés** (el modelo es mono-idioma-inglés)
+- **El "truco" del español**: los pasos `enhance`, `phonetic_normalization`, `synchronize` transforman el texto para que VoxCPM lo lea con acento español
+- **Target = English**: se salta enhance/phonetic/sync porque el TTS ya pronuncia inglés nativamente
+- **WhisperX** soporta decenas de idiomas nativamente (ja, pt, fr, de, it, ko, zh, etc.)
+
+### Source languages soportados
+| Idioma | Código |
+|--------|--------|
+| English | en |
+| Spanish | es |
+| Japanese | ja |
+| Portuguese | pt |
+| French | fr |
+| German | de |
+| Italian | it |
+| Korean | ko |
+| Chinese | zh |
+
+### Target languages soportados
+| Idioma | Notas |
+|--------|-------|
+| Español | Pipeline completo (translate + enhance + phonetic + sync) |
+| English | Solo translate, saltar post-procesamiento |
+
+### Cambios por archivo
+
+#### `backend/whisper_client.py`
+- Expandir el `LANGUAGE_MAP` (line 45) de 2 idiomas (en/es) a 10+ idiomas
+- Usar un diccionario en vez de ternary anidado
+
+#### `backend/translator.py`
+- `translate_chunks()`: aceptar `source_language` y `target_language`, generar system prompt dinámico
+- `enhance_translation_for_tts()`: solo aplicar si target=Spanish
+- `phonetic_normalization_for_tts()`: solo aplicar si target=Spanish
+- `synchronize_translation_for_tts()`: solo aplicar si target=Spanish
+- Cache filenames: `spanish_*` → `{target_lang}_*`
+- Fallback recovery (line 245): prompt dinámico para cualquier idioma
+
+#### `backend/main.py`
+- Agregar `source_language: str = "English"` y `target_language: str = "Spanish"` a `ProcessRequest`
+- Pipeline condicional en `process_translation_task()`:
+  - `language=source_language` para WhisperX transcripción
+  - Solo llamar enhance/phonetic/sync si `target_language == "Spanish"`
+  - `language=target_language` para QA verification
+- Cache filenames: `english_whisper.json` → `{source_lang}_whisper.json`, `spanish_*` → `{target_lang}_*`
+- Studio endpoints: leer caches con naming dinámico
+
+#### `backend/audio_processor.py`
+- Reemplazar `language="es"` hardcodeado en lines 617 y 731 por `language=target_language`
+
+#### `frontend/index.html`
+- Agregar dropdown `Idioma Original (Source)` con opciones de idiomas
+- Agregar dropdown `Idioma Destino (Target)` con Español/English
+- Botones de subtítulos dinámicos en vez de "Inglés"/"Español" hardcodeados
+- Actualizar descripción del overlay: "Pega la URL de un video de YouTube..."
+
+#### `frontend/app.js`
+- Agregar `source_language` y `target_language` al payload del API
+- Subtitle data: `eng/esp` → `source/target` keys dinámicas
+- CSS classes: `hide-eng/hide-esp` → `hide-source/hide-target`
+- Status messages dinámicos según idiomas seleccionados
+- Labels de botones de subtítulos dinámicos
+
+#### `frontend/style.css`
+- Actualizar selectores CSS de `hide-eng`, `hide-esp`, `text-eng`, `text-esp` a genéricos
+
+### Flujo completo
+
+```
+FRONTEND                          BACKEND
+  │                                  │
+  │ POST /api/process                │
+  │ { source_language: "Japanese",   │
+  │   target_language: "Spanish" }   │
+  │                                  │
+  ▼                                  ▼
+                        WhisperX(language="ja")
+                              │
+                              ▼
+                        translate_chunks(
+                          source="Japanese",
+                          target="Spanish"
+                        )
+                              │
+                     ┌────────┴────────┐
+                     ▼                 ▼
+               target=es         target=en
+               enhance()         [skip]
+               phonetic()        [skip]
+               sync()            [skip]
+                     │                 │
+                     ▼                 ▼
+                  VoxCPM ◄────────────┘
+                     │
+                     ▼
+               WhisperX(language="es")
+                     │
+                     ▼
+                  QA + Merge
+```
+
+### Backward Compatibility
+- Caches existentes con prefijo `spanish_*` se mantienen funcionales
+- Nuevos caches usarán `{target_lang}_*` (ej: `spanish_1_translated.json` o `english_1_translated.json`)
+- Si `ProcessRequest` no incluye `source_language`/`target_language`, defaults = "English"/"Spanish"
 
 ---
 

@@ -478,27 +478,27 @@ video {
     flex: 1;
 }
 
-.subtitle-line .text-eng {
+.subtitle-line .text-source {
     font-size: 13px;
     color: var(--color-text-muted);
 }
 
-.subtitle-line.active .text-eng {
+.subtitle-line.active .text-source {
     color: var(--color-text-main);
 }
 
-.subtitle-line .text-esp {
+.subtitle-line .text-target {
     font-size: 13px;
     font-weight: 600;
     color: var(--color-text-muted);
 }
 
-.subtitle-line.active .text-esp {
+.subtitle-line.active .text-target {
     color: var(--accent-gold-dark);
 }
 
-.subtitle-line.hide-eng .text-eng { display: none; }
-.subtitle-line.hide-esp .text-esp { display: none; }
+.subtitle-line.hide-source .text-source { display: none; }
+.subtitle-line.hide-target .text-target { display: none; }
 
 /* Sidebar Styling */
 .sidebar {
@@ -1507,8 +1507,8 @@ video {
 
     .panel-header h3 { font-size: 13px; }
 
-    .subtitle-line .text-eng,
-    .subtitle-line .text-esp {
+    .subtitle-line .text-source,
+    .subtitle-line .text-target {
         font-size: 12px;
     }
 

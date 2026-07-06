@@ -61,12 +61,12 @@ def fix_json_quotes(json_str: str) -> str:
     pattern = r'("text"\s*:\s*")(.*?)((?<!\\)"\s*,?\s*(?<!\\)"timestamp"|\s*\})'
     return re.sub(pattern, replace_quote, json_str, flags=re.DOTALL)
 
-def translate_chunks(chunks: list, model: str = "gemma4:e2b-it-qat", save_dir: str = None) -> list:
+def translate_chunks(chunks: list, model: str = "gemma4:e2b-it-qat", save_dir: str = None, source_language: str = "English", target_language: str = "Spanish") -> list:
     url = "http://127.0.0.1:11434/api/chat"
     system_msg = (
-        "You are an expert English to Spanish translator. "
-        "You will receive a JSON object with 'chunks' containing English text. "
-        "Translate the 'text' of each chunk to natural, fluent Spanish. "
+        f"You are an expert {source_language} to {target_language} translator. "
+        f"You will receive a JSON object with 'chunks' containing {source_language} text. "
+        f"Translate the 'text' of each chunk to natural, fluent {target_language}. "
         "Keep the exact 'timestamp' and 'index' values. Do not omit, combine, or split chunks. "
         "Return the resulting JSON object with the translated 'chunks' and nothing else."
     )
@@ -85,7 +85,7 @@ def translate_chunks(chunks: list, model: str = "gemma4:e2b-it-qat", save_dir: s
     if save_dir:
         try:
             os.makedirs(save_dir, exist_ok=True)
-            min_input_path = os.path.join(save_dir, "english_minimal.json")
+            min_input_path = os.path.join(save_dir, f"{source_language.lower()}_minimal.json")
             with open(min_input_path, "w", encoding="utf-8") as f:
                 json.dump({"chunks": minimal_chunks}, f, ensure_ascii=False, indent=2)
             print(f"Saved simplified English input to disk: {min_input_path}")
@@ -206,7 +206,7 @@ def translate_chunks(chunks: list, model: str = "gemma4:e2b-it-qat", save_dir: s
             
         if save_dir and translated_minimal_chunks:
             try:
-                min_output_path = os.path.join(save_dir, "spanish_minimal.json")
+                min_output_path = os.path.join(save_dir, f"{target_language.lower()}_minimal.json")
                 with open(min_output_path, "w", encoding="utf-8") as f:
                     json.dump({"chunks": translated_minimal_chunks}, f, ensure_ascii=False, indent=2)
                 print(f"Saved raw translated Spanish output to disk: {min_output_path}")
@@ -242,7 +242,7 @@ def translate_chunks(chunks: list, model: str = "gemma4:e2b-it-qat", save_dir: s
                     continue
                     
                 # Direct single-phrase translation prompt
-                chunk_prompt = f"Translate the following English sentence to natural, fluent Spanish. Return ONLY the translated Spanish text and nothing else:\n\n{orig_text}"
+                chunk_prompt = f"Translate the following {source_language} sentence to natural, fluent {target_language}. Return ONLY the translated {target_language} text and nothing else:\n\n{orig_text}"
                 single_payload = {
                     "model": model,
                     "messages": [
@@ -498,7 +498,7 @@ def synchronize_translation_for_tts(chunks: list, model: str) -> list:
         print(f"[Sanador IA] Falló la sincronización: {e}. Usando texto largo original.")
         return chunks
 
-def phonetic_normalization_for_tts(chunks: list, model: str = "qwen3.5:9b", save_dir: str = None) -> list:
+def phonetic_normalization_for_tts(chunks: list, model: str = "qwen3.5:9b", save_dir: str = None, target_language: str = "spanish") -> list:
     """
     Escanea las frases buscando números o acrónimos. 
     Si los encuentra, delega a una IA Especializada la tarea de escribir su pronunciación fonética.
@@ -589,7 +589,7 @@ def phonetic_normalization_for_tts(chunks: list, model: str = "qwen3.5:9b", save
         print("[Sanador IA] No se encontraron números ni acrónimos. Omitiendo pase de IA Fonética.")
         
     if save_dir:
-        out_path = os.path.join(save_dir, "spanish_phonetic.json")
+        out_path = os.path.join(save_dir, f"{target_language.lower()}_phonetic.json")
         try:
             with open(out_path, "w", encoding="utf-8") as f:
                 json.dump({"chunks": chunks}, f, indent=2, ensure_ascii=False)

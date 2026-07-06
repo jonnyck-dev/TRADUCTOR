@@ -9,6 +9,9 @@ backend/vibevoice/env_vibevoice/
 backend/VoxCPM/env_voxcpm/
 backend/demucs/env/
 
+# Cloned subproject repos (auto-setup clones these)
+backend/VoxCPM/
+
 # Bundled binaries (downloaded by setup script)
 backend/bin/ffmpeg
 backend/bin/ffmpeg.exe
@@ -17,6 +20,7 @@ backend/bin/ffmpeg.exe
 backend/vibevoice/checkpoints/
 backend/VoxCPM/pretrained_models/
 backend/demucs/models/
+backend/whisperx_models/
 
 # Cache directories
 cache/

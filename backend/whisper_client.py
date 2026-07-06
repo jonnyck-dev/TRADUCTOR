@@ -18,14 +18,26 @@ def wsl_to_windows_path(wsl_path: str) -> str:
         print(f"Error converting path {wsl_path} with wslpath: {e}")
         return wsl_path
 
-def transcribe_audio(audio_path: str, output_json_path: str, language: str = "English", model_name: str = "openai/whisper-tiny") -> dict:
+def transcribe_audio(audio_path: str, output_json_path: str, language: str = "English", model_name: str = None) -> dict:
     """
     Transcribes audio using WhisperX to get high-precision segment and word-level timestamps.
     Works natively on Windows or via WSL using cmd.exe.
+    Default model: large-v3-turbo (configurable via WHISPER_MODEL env var).
     """
+    # Default model from env or hardcoded fallback
+    if model_name is None:
+        model_name = os.environ.get("WHISPER_MODEL", "large-v3-turbo")
     # Project base directory
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     vibevoice_dir = os.path.join(base_dir, "backend", "vibevoice")
+    models_dir = os.path.join(base_dir, "backend", "whisperx_models", "align")
+
+    # Local alignment model paths (downloaded manually, NOT from HF cache)
+    LOCAL_ALIGN_MODELS = {
+        "ja": os.path.join(models_dir, "ja"),
+        "zh": os.path.join(models_dir, "zh"),
+        "ko": os.path.join(models_dir, "ko"),
+    }
 
     # Map model name for WhisperX CLI
     model_arg = model_name
@@ -38,12 +50,49 @@ def transcribe_audio(audio_path: str, output_json_path: str, language: str = "En
         model_arg = "medium"
     elif "whisper-base" in model_lower or model_lower == "base":
         model_arg = "base"
+    elif "large-v3-turbo" in model_lower or model_lower == "large-v3-turbo":
+        model_arg = "large-v3-turbo"
     elif "whisper-large" in model_lower or "large" in model_lower:
         model_arg = "large-v2"
 
     # Map language name to code
-    lang_code = "en" if language.lower() in ["english", "en"] else "es" if language.lower() in ["spanish", "es"] else language
+    LANGUAGE_MAP = {
+        "english": "en",
+        "spanish": "es",
+        "japanese": "ja",
+        "portuguese": "pt",
+        "french": "fr",
+        "german": "de",
+        "italian": "it",
+        "korean": "ko",
+        "chinese": "zh",
+    }
+    CODE_TO_CODE = {
+        "en": "en",
+        "es": "es",
+        "ja": "ja",
+        "pt": "pt",
+        "fr": "fr",
+        "de": "de",
+        "it": "it",
+        "ko": "ko",
+        "zh": "zh",
+    }
 
+    def get_lang_code(language: str) -> str:
+        lang_lower = language.strip().lower()
+        return LANGUAGE_MAP.get(lang_lower) or CODE_TO_CODE.get(lang_lower, "en")
+
+    lang_code = get_lang_code(language)
+
+    env = None
+    align_model_flag = ""
+    if lang_code in LOCAL_ALIGN_MODELS and os.path.isdir(LOCAL_ALIGN_MODELS[lang_code]):
+        if os.name == 'nt':
+            align_model_flag = f' --align_model "{os.path.abspath(LOCAL_ALIGN_MODELS[lang_code])}"'
+        else:
+            align_model_flag = f' --align_model "{wsl_to_windows_path(LOCAL_ALIGN_MODELS[lang_code])}"'
+    
     if os.name == 'nt':
         whisperx_exe = os.path.join(vibevoice_dir, "env_vibevoice", "Scripts", "whisperx.exe")
         win_audio_path = os.path.abspath(audio_path)
@@ -54,7 +103,10 @@ def transcribe_audio(audio_path: str, output_json_path: str, language: str = "En
             f'"{whisperx_exe}" '
             f'"{win_audio_path}" --model {model_arg} --language {lang_code} '
             f'--output_dir "{win_output_dir}" --output_format json --device cuda --compute_type float16'
+            f'{align_model_flag}'
         )
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
         cwd = None
     else:
         win_audio_path = wsl_to_windows_path(audio_path)
@@ -66,14 +118,14 @@ def transcribe_audio(audio_path: str, output_json_path: str, language: str = "En
         win_activate = wsl_to_windows_path(activate_bat)
         
         cmd = (
-            f'cmd.exe /c "set VIRTUAL_ENV=&\"{win_activate}\"&& '
+            f'cmd.exe /c "set VIRTUAL_ENV=&\"{win_activate}\"&& set PYTHONIOENCODING=utf-8&& '
             f'whisperx \\"{win_audio_path}\\" --model {model_arg} --language {lang_code} '
-            f'--output_dir \\"{win_output_dir}\\" --output_format json --device cuda --compute_type float16" < /dev/null'
+            f'--output_dir \\"{win_output_dir}\\" --output_format json --device cuda --compute_type float16{align_model_flag.replace(chr(34), chr(92)+chr(34))}" < /dev/null'
         )
         cwd = "/mnt/c"
 
     print(f"Executing WhisperX command: {cmd}")
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=cwd)
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8', errors='replace', cwd=cwd, env=env if os.name == 'nt' else None)
 
     if result.returncode != 0:
         print(f"WhisperX stdout: {result.stdout}")

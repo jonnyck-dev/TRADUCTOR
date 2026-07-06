@@ -76,6 +76,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnTogglePanel = document.getElementById('btn-toggle-panel');
 
     let pollInterval = null;
+
+    let sourceLanguage = 'English';
+    let targetLanguage = 'Spanish';
     let subtitleData = [];
     let activeSubIndex = -1;
     let currentTaskId = null;
@@ -102,12 +105,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Toggle English/Spanish displays
+    // Toggle subtitle displays
     btnShowOriginal.addEventListener('click', () => {
         btnShowOriginal.classList.toggle('active');
         const lines = document.querySelectorAll('.subtitle-line');
         lines.forEach(line => {
-            line.classList.toggle('hide-eng', !btnShowOriginal.classList.contains('active'));
+            line.classList.toggle('hide-source', !btnShowOriginal.classList.contains('active'));
         });
     });
 
@@ -115,7 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnShowTranslated.classList.toggle('active');
         const lines = document.querySelectorAll('.subtitle-line');
         lines.forEach(line => {
-            line.classList.toggle('hide-esp', !btnShowTranslated.classList.contains('active'));
+            line.classList.toggle('hide-target', !btnShowTranslated.classList.contains('active'));
         });
     });
 
@@ -503,8 +506,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 subtitleData.push({
                     start: orig.timestamp[0],
                     end: orig.timestamp[1],
-                    eng: orig.text,
-                    esp: trans.text
+                    source: orig.text,
+                    target: trans.text
                 });
             }
         }
@@ -598,14 +601,14 @@ document.addEventListener('DOMContentLoaded', () => {
             line.dataset.index = index;
             
             // Apply language filter visibility classes
-            if (!btnShowOriginal.classList.contains('active')) line.classList.add('hide-eng');
-            if (!btnShowTranslated.classList.contains('active')) line.classList.add('hide-esp');
+            if (!btnShowOriginal.classList.contains('active')) line.classList.add('hide-source');
+            if (!btnShowTranslated.classList.contains('active')) line.classList.add('hide-target');
             
             line.innerHTML = `
                 <div class="timestamp">${formatTime(sub.start)}</div>
                 <div class="text-pair">
-                    <div class="text-eng">${sub.eng}</div>
-                    <div class="text-esp">${sub.esp}</div>
+                    <div class="text-source">${sub.source}</div>
+                    <div class="text-target">${sub.target}</div>
                 </div>
             `;
             
@@ -685,6 +688,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnStudioRegenerate = document.getElementById('btn-studio-regenerate');
     const studioAudioPlayer = document.getElementById('studio-audio-player');
     const btnStudioFinalize = document.getElementById('btn-studio-finalize');
+    const selectStudioSourceLang = document.getElementById('select-studio-source-lang');
+    const btnRetranscribeSingle = document.getElementById('btn-studio-retranscribe-single');
+    const lblTranscript = document.getElementById('lbl-transcript');
 
     let studioActiveBlock = null;
     let studioData = null;
@@ -733,17 +739,57 @@ document.addEventListener('DOMContentLoaded', () => {
     if (navStudio) navStudio.addEventListener('click', (e) => { e.preventDefault(); openStudioView(); });
 
     function loadStudioData() {
-        fetch(`/api/studio/${currentTaskId}/data`)
+        // First fetch language meta
+        fetch(`/api/studio/${currentTaskId}/meta`)
             .then(res => res.json())
-            .then(data => {
-                if (data.status === 'ok') {
-                    studioData = data.phrases;
-                    renderTimeline();
-                } else {
-                    alert("Error loading studio data.");
+            .then(meta => {
+                if (meta.status === 'ok') {
+                    sourceLanguage = meta.source_language || 'English';
+                    targetLanguage = meta.target_language || 'Spanish';
+                    updateStudioLabels();
                 }
             })
-            .catch(err => console.error("Studio error:", err));
+            .catch(() => {})
+            .finally(() => {
+                // Then fetch studio data regardless of meta result
+                fetch(`/api/studio/${currentTaskId}/data`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'ok') {
+                            // Also update from /data response if available
+                            if (data.source_language) sourceLanguage = data.source_language;
+                            if (data.target_language) targetLanguage = data.target_language;
+                            updateStudioLabels();
+                            studioData = data.phrases;
+                            renderTimeline();
+                        } else {
+                            alert("Error loading studio data.");
+                        }
+                    })
+                    .catch(err => console.error("Studio error:", err));
+            });
+    }
+
+    function updateStudioLabels() {
+        // Update playback buttons
+        if (btnStudioPlayOrig) btnStudioPlayOrig.innerHTML = `<i class="fa-solid fa-ear-listen"></i> ${sourceLanguage}`;
+        if (btnStudioPlayDub) btnStudioPlayDub.innerHTML = `<i class="fa-solid fa-play"></i> ${targetLanguage}`;
+        
+        // Update track labels
+        const dubbedTrack = document.querySelector('.dubbed-track');
+        const englishTrack = document.querySelector('.english-track');
+        if (dubbedTrack) dubbedTrack.textContent = `A1 | Doblaje (${targetLanguage.substring(0,3)})`;
+        if (englishTrack) englishTrack.textContent = `A2 | Original (${sourceLanguage.substring(0,3)})`;
+        
+        // Update inspector label
+        if (lblTranscript) lblTranscript.textContent = `TRANSCRIPT (${targetLanguage})`;
+        
+        // Update language selector
+        if (selectStudioSourceLang) selectStudioSourceLang.value = sourceLanguage;
+        
+        // Update subtitle toggle buttons
+        if (btnShowOriginal) btnShowOriginal.textContent = sourceLanguage;
+        if (btnShowTranslated) btnShowTranslated.textContent = targetLanguage;
     }
 
     function renderTimeline() {
@@ -789,12 +835,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const width = (phrase.end_time - phrase.start_time) * PIXELS_PER_SECOND;
             
             // English Block
-            const engBlock = document.createElement('div');
-            engBlock.className = 'timeline-block english-block';
-            engBlock.style.left = `${left}px`;
-            engBlock.style.width = `${Math.max(width, 30)}px`;
-            engBlock.innerHTML = `<div class="waveform-bg"></div><span style="position:relative; z-index:1;">${phrase.text}</span>`;
-            trackEnglish.appendChild(engBlock);
+            const sourceBlock = document.createElement('div');
+            sourceBlock.className = 'timeline-block source-block';
+            sourceBlock.style.left = `${left}px`;
+            sourceBlock.style.width = `${Math.max(width, 30)}px`;
+            sourceBlock.innerHTML = `<div class="waveform-bg"></div><span style="position:relative; z-index:1;">${phrase.text}</span>`;
+            trackEnglish.appendChild(sourceBlock);
             
             // Dubbed Block (Interactive)
             const dubBlock = document.createElement('div');
@@ -824,14 +870,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (btnStudioPlayOrig) btnStudioPlayOrig.addEventListener('click', () => {
         if (!studioActiveBlock || !studioAudioPlayer) return;
+        // Mute video player while playing inspector audio
+        if (videoPlayer) videoPlayer.muted = true;
         studioAudioPlayer.src = `/api/studio/${currentTaskId}/audio/original?start=${studioActiveBlock.start_time}&end=${studioActiveBlock.end_time}`;
         studioAudioPlayer.play();
+        // Unmute when audio ends
+        studioAudioPlayer.onended = () => {
+            if (videoPlayer) videoPlayer.muted = false;
+        };
     });
 
     if (btnStudioPlayDub) btnStudioPlayDub.addEventListener('click', () => {
         if (!studioActiveBlock || !studioAudioPlayer) return;
+        // Mute video player while playing inspector audio
+        if (videoPlayer) videoPlayer.muted = true;
         studioAudioPlayer.src = `/api/studio/${currentTaskId}/audio/dubbed/${studioActiveBlock.phrase_index}?t=${new Date().getTime()}`;
         studioAudioPlayer.play();
+        // Unmute when audio ends
+        studioAudioPlayer.onended = () => {
+            if (videoPlayer) videoPlayer.muted = false;
+        };
     });
 
     if (btnStudioRegenerate) btnStudioRegenerate.addEventListener('click', () => {
@@ -859,7 +917,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .then(res => res.json())
         .then(data => {
-            btnStudioRegenerate.innerHTML = '<i class="fa-solid fa-check"></i> ¡Éxito! Reproduce el Español.';
+            btnStudioRegenerate.innerHTML = `<i class="fa-solid fa-check"></i> ¡Éxito! Reproduce el ${targetLanguage}.`;
             studioActiveBlock.text = studioTextarea.value;
             
             setTimeout(() => {
@@ -895,5 +953,50 @@ document.addEventListener('DOMContentLoaded', () => {
     if (taskId) {
         currentTaskId = taskId;
         setTimeout(openStudioView, 100);
+    }
+
+    // Single-phrase retranscribe (from inspector)
+    if (btnRetranscribeSingle) {
+        btnRetranscribeSingle.addEventListener('click', () => {
+            if (!studioActiveBlock || !currentTaskId) {
+                alert('Selecciona una frase primero.');
+                return;
+            }
+
+            const sourceLang = selectStudioSourceLang ? selectStudioSourceLang.value : 'English';
+            const phraseIdx = studioActiveBlock.phrase_index;
+
+            btnRetranscribeSingle.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> WhisperX transcribiendo...';
+            btnRetranscribeSingle.disabled = true;
+
+            fetch(`/api/studio/${currentTaskId}/retranscribe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    start_phrase_index: phraseIdx,
+                    end_phrase_index: phraseIdx,
+                    source_language: sourceLang
+                })
+            })
+            .then(res => {
+                if (!res.ok) return res.json().then(e => { throw new Error(e.detail || 'Error del servidor'); });
+                return res.json();
+            })
+            .then(data => {
+                const newCount = data.new_phrases ? data.new_phrases.length : 0;
+                btnRetranscribeSingle.innerHTML = `<i class="fa-solid fa-check"></i> ¡${newCount} frase(s) encontrada(s)!`;
+                loadStudioData();
+                setTimeout(() => {
+                    btnRetranscribeSingle.innerHTML = '<i class="fa-solid fa-magnifying-glass-plus"></i> Re-transcribir con WhisperX';
+                    btnRetranscribeSingle.disabled = false;
+                }, 3000);
+            })
+            .catch(err => {
+                console.error('[Studio] Single retranscribe error:', err);
+                alert('Error re-transcribiendo: ' + err.message);
+                btnRetranscribeSingle.innerHTML = '<i class="fa-solid fa-magnifying-glass-plus"></i> Re-transcribir con WhisperX';
+                btnRetranscribeSingle.disabled = false;
+            });
+        });
     }
 });

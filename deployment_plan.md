@@ -169,9 +169,6 @@ CMD ["python3", "backend/main.py"]
 La app corre **nativamente en Windows** (`run.bat`). Cloudflared debe estar en Windows:
 
 ```
-# Descargar (ya instalado)
-C:\Users\jpzam\cloudflared.exe
-
 # Autenticar (solo primera vez)
 cloudflared.exe tunnel login
 

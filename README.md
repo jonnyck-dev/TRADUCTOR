@@ -1,6 +1,6 @@
-# AEGIS Audio Editor / AI Video Dubber (v3.0)
+# AEGIS Audio Editor / AI Video Dubber (v4.0)
 
-Este proyecto es una aplicación web local para **traducir, doblar y editar** videos de YouTube al español de forma automatizada. Combina transcripción (WhisperX), traducción local (Ollama), síntesis de voz (VibeVoice / VoxCPM) y edición no-lineal en un estudio interactivo, orquestado bajo una arquitectura optimizada para Windows/WSL con GPUs NVIDIA.
+Este proyecto es una aplicación web local para **traducir, doblar y editar** videos de YouTube de forma automatizada desde y hacia múltiples idiomas (Español, Inglés, Japonés, Portugués, Francés, Alemán, Italiano, Coreano, Chino). Combina transcripción (WhisperX), traducción local (Ollama), síntesis de voz (VibeVoice / VoxCPM) y edición no-lineal en un estudio interactivo, orquestado bajo una arquitectura optimizada para Windows/WSL con GPUs NVIDIA.
 
 ---
 
@@ -27,9 +27,9 @@ graph TD
 
 1. **Separación (Demucs via UVR5-UI)**: Extrae voz y fondo instrumental por separado. Usa el modelo `htdemucs_ft`.
 
-2. **Transcripción (WhisperX)**: Reconocimiento de voz con timestamps a nivel de palabra mediante alineación forzada (wav2vec2).
+2. **Transcripción (WhisperX)**: Reconocimiento de voz multilingüe con timestamps a nivel de palabra mediante alineación forzada (wav2vec2). Soporta inglés, español, japonés, portugués, francés, alemán, italiano, coreano y chino.
 
-3. **Traducción (Ollama)**: Traducción one-shot con auto-corrección JSON (hasta 5 reintentos). Soporta cualquier modelo local o cloud.
+3. **Traducción (Ollama)**: Traducción one-shot multilingüe con auto-corrección JSON (hasta 5 reintentos). Soporta cualquier par de idiomas (X→Español o X→Inglés).
 
 4. **Sanador IA**: Capa post-traducción que elimina alucinaciones, agrega puntuación prosódica (!, ?) y corrige repeticiones.
 
@@ -136,6 +136,7 @@ Servidor en **http://localhost:8000**
 - Panel de timers con barras de progreso por etapa
 - Selector inteligente de modelos Ollama
 - Simulador de caché para depuración
+- Selector de idioma original y destino (Español/Inglés)
 - Studio Editor con timeline interactivo
 
 ---
@@ -161,6 +162,44 @@ Este repositorio contiene varios archivos `.md` con propósitos específicos. Es
 | `deployment_plan.md` | Plan de despliegue a producción: Docker, portabilidad cloud, variables de entorno, submodules. Para cuando el proyecto se mueva a un servidor. |
 | `debugagent.md` | Contexto de debugging para agentes IA: historial de errores resueltos, arquitectura clave, sistema de caché. Consultar cuando se reporte un error en ejecución. |
 | `benchmark_report.md` | Reporte de rendimiento comparativo entre VibeVoice y VoxCPM en diferentes escenarios (con/sin clonación, one-shot/frase, paralelo/secuencial). |
+
+### Carpeta `debugs/`
+
+Scripts de test automatizados para verificar la integridad del código sin necesidad de ejecutar el pipeline completo. Ejecutables con Python estándar — no requieren GPU ni Ollama.
+
+| Script | Propósito |
+|--------|-----------|
+| `test_language_chain.py` | Verifica que la cadena completa del selector de idiomas V4.0 (frontend → API → WhisperX → traductor) esté correctamente cableada. Chequea que no haya hardcodes de `language="English"`, que los parámetros fluyan desde `ProcessRequest` hasta los prompts de traducción, y simula la conversión de nombres de idioma a códigos ISO (`Japanese` → `ja`). |
+
+Ejecución:
+```bash
+python3 debugs/test_language_chain.py
+```
+
+Agregar nuevos tests a esta carpeta cuando se implementen features críticas que deban validarse antes de deploy.
+
+### Carpeta `backend/whisperx_models/`
+
+Modelos de alineación de palabras (wav2vec2) para WhisperX, descargados localmente al proyecto. **No dependen del cache de HuggingFace** — se descargan una vez y se referencian con rutas absolutas.
+
+```
+backend/whisperx_models/
+└── align/
+    └── ja/   ← wav2vec2-large-xlsr-53-japanese (1.2 GB)
+    └── zh/   ← (pendiente descarga)
+    └── ko/   ← (pendiente descarga)
+```
+
+Para agregar un nuevo idioma:
+```bash
+# Desde WSL:
+python3 -c "
+from huggingface_hub import snapshot_download
+snapshot_download('jonatasgrosman/wav2vec2-large-xlsr-53-japanese', local_dir='backend/whisperx_models/align/ja')
+"
+```
+
+Los modelos se referencian automáticamente desde `whisper_client.py` (sin hardcodear rutas de HF cache).
 
 ### Flujo de consulta recomendado para una IA
 

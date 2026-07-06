@@ -20,7 +20,7 @@
             <div class="logo">
                 <i class="fa-solid fa-scissors purple-glow" style="color: #00f2fe;"></i>
                 <h1>AEGIS AUDIO EDITOR</h1>
-                <span class="badge" style="background: rgba(0, 242, 254, 0.2); color: #00f2fe;">v3.0</span>
+                <span class="badge" style="background: rgba(0, 242, 254, 0.2); color: #00f2fe;">v4.0</span>
             </div>
             <button id="btn-close-studio" class="glow-button"><i class="fa-solid fa-arrow-left"></i> Volver al Inicio</button>
         </header>
@@ -37,17 +37,30 @@
                     <p id="inspector-block-name" class="text-gray" style="margin-bottom: 15px;">Selecciona un bloque de audio en la línea de tiempo inferior...</p>
                     
                     <div class="inspector-content hidden" id="inspector-content">
-                        <label>TRANSCRIPT (Español)</label>
+                        <label id="lbl-transcript">TRANSCRIPT</label>
                         <textarea id="studio-textarea" rows="8"></textarea>
                         
+                        <label style="margin-top: 15px; display: block;">IDIOMA ORIGINAL (SOURCE)</label>
+                        <select id="select-studio-source-lang" class="studio-select" style="width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px; border-radius: 4px; margin-bottom: 10px;">
+                            <option value="English">🇬🇧 English</option>
+                            <option value="Spanish">🇪🇸 Español</option>
+                            <option value="Japanese">🇯🇵 日本語</option>
+                            <option value="Portuguese">🇧🇷 Português</option>
+                            <option value="French">🇫🇷 Français</option>
+                            <option value="German">🇩🇪 Deutsch</option>
+                            <option value="Italian">🇮🇹 Italiano</option>
+                            <option value="Korean">🇰🇷 한국어</option>
+                            <option value="Chinese">🇨🇳 中文</option>
+                        </select>
+
                         <div class="inspector-actions" style="display: flex; gap: 10px; margin-top: 15px;">
-                            <button id="btn-studio-play-orig" class="glow-button" style="flex:1; background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1);"><i class="fa-solid fa-ear-listen"></i> Inglés</button>
-                            <button id="btn-studio-play-dub" class="glow-button" style="flex:1; background: rgba(0, 242, 254, 0.1); border-color: rgba(0, 242, 254, 0.3); color: #00f2fe;"><i class="fa-solid fa-play"></i> Español</button>
+                            <button id="btn-studio-play-orig" class="glow-button" style="flex:1; background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1);"><i class="fa-solid fa-ear-listen"></i> Original</button>
+                            <button id="btn-studio-play-dub" class="glow-button" style="flex:1; background: rgba(0, 242, 254, 0.1); border-color: rgba(0, 242, 254, 0.3); color: #00f2fe;"><i class="fa-solid fa-play"></i> Doblaje</button>
                         </div>
 
                         <label style="margin-top: 15px; display: block;">MODELO TTS</label>
                         <select id="select-studio-tts-model" class="studio-select" style="width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px; border-radius: 4px;">
-                            <option value="openbmb/VoxCPM2">VoxCPM2 (Español Perfecto)</option>
+                            <option value="openbmb/VoxCPM2">VoxCPM2</option>
                             <option value="VibeVoice-1.5B">VibeVoice 1.5B (Original)</option>
                             <option value="VibeVoice-2B">VibeVoice 2B (Alta Calidad)</option>
                         </select>
@@ -66,6 +79,12 @@
                         <button id="btn-studio-regenerate" class="glow-button regenerate-btn" style="width: 100%; margin-top: 15px; background: linear-gradient(135deg, rgba(157, 78, 221, 0.6) 0%, rgba(0, 242, 254, 0.4) 100%);">
                             <i class="fa-solid fa-rotate"></i> Regenerate Audio (5s)
                         </button>
+                        <button id="btn-studio-delete" class="glow-button delete-btn" style="width: 100%; margin-top: 10px; background: rgba(255, 77, 77, 0.15); border-color: rgba(255, 77, 77, 0.5); color: #ff4d4d; font-weight: 600;">
+                            <i class="fa-solid fa-trash"></i> Eliminar Frase
+                        </button>
+                        <button id="btn-studio-retranscribe-single" class="glow-button" style="width: 100%; margin-top: 10px; background: rgba(255, 165, 0, 0.15); border-color: rgba(255, 165, 0, 0.5); color: #ffa500; font-weight: 600;">
+                            <i class="fa-solid fa-magnifying-glass-plus"></i> Re-transcribir con WhisperX
+                        </button>
                     </div>
                 </div>
             </div>
@@ -80,8 +99,8 @@
             <div class="timeline-container">
                 <div class="timeline-track-labels">
                     <div class="track-label video-track">V1 | Video</div>
-                    <div class="track-label dubbed-track" style="color: #00f2fe;">A1 | Doblaje (Esp)</div>
-                    <div class="track-label english-track" style="color: #9d4edd;">A2 | Original (Ing)</div>
+                    <div class="track-label dubbed-track" style="color: #00f2fe;">A1 | Doblaje</div>
+                    <div class="track-label english-track" style="color: #9d4edd;">A2 | Original</div>
                 </div>
                 <div class="timeline-scroll-area" id="timeline-scroll-area">
                     <div class="timeline-ruler" id="timeline-ruler"></div>

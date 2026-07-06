@@ -22,7 +22,7 @@
                 <div class="logo">
                     <i class="fa-solid fa-wand-magic-sparkles purple-glow"></i>
                     <h1>JANUS Dubber</h1>
-                    <span class="badge">v3.0</span>
+                    <span class="badge">v4.0</span>
                 </div>
                 
                 <nav class="top-nav">
@@ -51,7 +51,7 @@
                 <div id="start-overlay" class="overlay-panel">
                     <div class="overlay-content">
                         <h2>Traducir y Doblar Video</h2>
-                         <p>Pega la URL de un video de YouTube en inglés o sube tu propio archivo. JANUS lo traducirá al español automáticamente.</p>
+                         <p>Pega la URL de un video de YouTube o sube tu propio archivo. JANUS detectará el idioma original y lo traducirá al idioma que elijas.</p>
                         
                         <div class="url-input-container">
                             <i class="fa-brands fa-youtube icon"></i>
@@ -133,8 +133,8 @@
                     <h3><i class="fa-solid fa-closed-captioning"></i> Transcripción y Traducción Sincronizada</h3>
                     <div class="sub-toggle-buttons">
                         <button id="btn-toggle-panel" class="active" title="Mostrar/Ocultar Caja"><i class="fa-solid fa-eye"></i></button>
-                        <button id="btn-show-original" class="active">Inglés</button>
-                        <button id="btn-show-translated" class="active">Español</button>
+                        <button id="btn-show-original" class="active">Original</button>
+                        <button id="btn-show-translated" class="active">Traducción</button>
                     </div>
                 </div>
                 <div class="subtitles-viewport" id="subtitles-viewport">
@@ -184,6 +184,49 @@
                                     <option value="en-Grace_woman">(Mujer) Grace</option>
                                     <option value="en-Emma_woman">(Mujer) Emma</option>
                                 </optgroup>
+                            </select>
+                            <i class="fa-solid fa-chevron-down dropdown-icon"></i>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="select-source-lang">Idioma Original (Source)</label>
+                        <div class="select-wrapper">
+                            <select id="select-source-lang">
+                                <option value="English">🇬🇧 English</option>
+                                <option value="Spanish">🇪🇸 Español</option>
+                                <option value="Japanese">🇯🇵 日本語</option>
+                                <option value="Portuguese">🇧🇷 Português</option>
+                                <option value="French">🇫🇷 Français</option>
+                                <option value="German">🇩🇪 Deutsch</option>
+                                <option value="Italian">🇮🇹 Italiano</option>
+                                <option value="Korean">🇰🇷 한국어</option>
+                                <option value="Chinese">🇨🇳 中文</option>
+                            </select>
+                            <i class="fa-solid fa-chevron-down dropdown-icon"></i>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="select-target-lang">Idioma Destino (Doblaje)</label>
+                        <div class="select-wrapper">
+                            <select id="select-target-lang">
+                                <option value="Spanish">🇪🇸 Español (Recomendado)</option>
+                                <option value="English">🇬🇧 English</option>
+                            </select>
+                            <i class="fa-solid fa-chevron-down dropdown-icon"></i>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="select-whisper-model">Modelo de Transcripción (WhisperX)</label>
+                        <div class="select-wrapper">
+                            <select id="select-whisper-model">
+                                <option value="large-v3-turbo" selected>🚀 Large V3 Turbo (1.6 GB - Recomendado)</option>
+                                <option value="large-v2">Large V2 (Más preciso, más lento)</option>
+                                <option value="medium">Medium</option>
+                                <option value="small">Small</option>
+                                <option value="tiny">Tiny (Más rápido, menos preciso)</option>
                             </select>
                             <i class="fa-solid fa-chevron-down dropdown-icon"></i>
                         </div>
@@ -262,26 +305,26 @@
                         </li>
                         <li>
                             <div class="step-num">2</div>
-                            <p><strong>Separación (Demucs):</strong> Aísla la voz del ruido/música para transcripciones y clonaciones más limpias.</p>
+                            <p><strong>Separación con IA:</strong> Aísla la voz del ruido/música para transcripciones y clonaciones más limpias.</p>
                         </li>
                         <li>
                             <div class="step-num">3</div>
-                            <p><strong>Transcripción:</strong> <code>WhisperX</code> genera los tiempos de voz con alineación por palabra.</p>
+                            <p><strong>Transcripción:</strong> <code>La IA</code> genera los tiempos de voz con alineación por palabra.</p>
                         </li>
                         <li>
                             <div class="step-num">4</div>
-                            <p><strong>Traducción:</strong> El modelo de Ollama (local/nube) traduce el contenido en One-Shot.</p>
+                            <p><strong>Traducción:</strong> El modelo de Ollama (local/nube) traduce el contenido</p>
                         </li>
                         <li>
                             <div class="step-num">5</div>
-                            <p><strong>Doblaje:</strong> Síntesis persistente de <code>VibeVoice</code> o <code>TTS Nativo de Windows</code>, sincronizado y mezclado.</p>
+                            <p><strong>Doblaje:</strong> Síntesis persistente de <code>modelo de IA</code> o <code>TTS Nativo de Windows</code>, sincronizado y mezclado.</p>
                         </li>
                     </ol>
                 </div>
             </div>
 
             <footer class="sidebar-footer">
-                <p>Desarrollado para Joan en Localhost</p>
+                <p>Desarrollado para Jonnyck-dev en Localhost</p>
                 <div class="links">
                     <a href="https://github.com/tonhowtf/omniget" target="_blank"><i class="fa-brands fa-github"></i> Omniget</a>
                 </div>
@@ -329,19 +372,56 @@
                     <p id="inspector-block-name" class="text-gray" style="margin-bottom: 15px;">Selecciona un bloque de audio en la línea de tiempo inferior...</p>
 
                     <div class="inspector-content hidden" id="inspector-content">
-                        <label>TRANSCRIPT (Español)</label>
+                        <label id="lbl-transcript">TRANSCRIPT</label>
                         <textarea id="studio-textarea" rows="8"></textarea>
 
+                        <label style="margin-top: 15px; display: block;">IDIOMA ORIGINAL (SOURCE)</label>
+                        <select id="select-studio-source-lang" class="studio-select" style="width: 100%; background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.15); color: var(--color-text-main); padding: 8px; border-radius: 4px; margin-bottom: 10px;">
+                            <option value="English">🇬🇧 English</option>
+                            <option value="Spanish">🇪🇸 Español</option>
+                            <option value="Japanese">🇯🇵 日本語</option>
+                            <option value="Portuguese">🇧🇷 Português</option>
+                            <option value="French">🇫🇷 Français</option>
+                            <option value="German">🇩🇪 Deutsch</option>
+                            <option value="Italian">🇮🇹 Italiano</option>
+                            <option value="Korean">🇰🇷 한국어</option>
+                            <option value="Chinese">🇨🇳 中文</option>
+                        </select>
+
+                        <label style="margin-top: 10px; display: block;">IDIOMA DESTINO (DOBLAJE)</label>
+                        <select id="select-studio-target-lang" class="studio-select" style="width: 100%; background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.15); color: var(--color-text-main); padding: 8px; border-radius: 4px; margin-bottom: 10px;">
+                            <option value="Spanish">🇪🇸 Español (Recomendado)</option>
+                            <option value="English">🇬🇧 English</option>
+                        </select>
+
+                        <label style="margin-top: 10px; display: block;">MODELO DE TRADUCCIÓN (OLLAMA)</label>
+                        <select id="select-studio-model" class="studio-select" style="width: 100%; background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.15); color: var(--color-text-main); padding: 8px; border-radius: 4px; margin-bottom: 10px;">
+                            <option value="">(Cargando modelos...)</option>
+                        </select>
+
                         <div class="inspector-actions" style="display: flex; gap: 10px; margin-top: 15px;">
-                            <button id="btn-studio-play-orig" class="glow-button" style="flex:1; background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.1); color: var(--color-text-main);"><i class="fa-solid fa-ear-listen"></i> Inglés</button>
-                             <button id="btn-studio-play-dub" class="glow-button" style="flex:1; background: rgba(212, 168, 83, 0.15); border: 1px solid rgba(212, 168, 83, 0.3); color: var(--accent-gold-dark);"><i class="fa-solid fa-play"></i> Español</button>
+                            <button id="btn-studio-play-orig" class="glow-button" style="flex:1; background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.1); color: var(--color-text-main);"><i class="fa-solid fa-ear-listen"></i> Original</button>
+                             <button id="btn-studio-play-dub" class="glow-button" style="flex:1; background: rgba(212, 168, 83, 0.15); border: 1px solid rgba(212, 168, 83, 0.3); color: var(--accent-gold-dark);"><i class="fa-solid fa-play"></i> Doblaje</button>
                         </div>
+                        
+                        <button id="btn-studio-translate" class="glow-button" style="width: 100%; margin-top: 15px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.6) 0%, rgba(168, 85, 247, 0.4) 100%); border-color: rgba(139, 92, 246, 0.5); color: white; font-weight: 600;">
+                            <i class="fa-solid fa-language"></i> Traducir con IA
+                        </button>
                         
                         <label style="margin-top: 15px; display: block;">MODELO TTS</label>
                         <select id="select-studio-tts-model" class="studio-select" style="width: 100%; background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.15); color: var(--color-text-main); padding: 8px; border-radius: 4px;">
                             <option value="openbmb/VoxCPM2" selected>VoxCPM2 (Hifi - 2.0B)</option>
                             <option value="VibeVoice-1.5B">VibeVoice 1.5B (Standard)</option>
                             <option value="VibeVoice-Realtime-0.5B">VibeVoice 0.5B (Streaming)</option>
+                        </select>
+
+                        <label style="margin-top: 15px; display: block;">MODELO WHISPERX</label>
+                        <select id="select-studio-whisper-model" class="studio-select" style="width: 100%; background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.15); color: var(--color-text-main); padding: 8px; border-radius: 4px; margin-bottom: 10px;">
+                            <option value="large-v3-turbo" selected>🚀 Large V3 Turbo</option>
+                            <option value="large-v2">Large V2</option>
+                            <option value="medium">Medium</option>
+                            <option value="small">Small</option>
+                            <option value="tiny">Tiny</option>
                         </select>
                         
                         <label style="margin-top: 15px; display: block;">VOZ (SPEAKER)</label>
@@ -367,6 +447,9 @@
                         </button>
                         <button id="btn-studio-delete" class="glow-button delete-btn" style="width: 100%; margin-top: 10px; background: rgba(255, 77, 77, 0.15); border-color: rgba(255, 77, 77, 0.5); color: #ff4d4d; font-weight: 600;">
                             <i class="fa-solid fa-trash"></i> Eliminar Frase
+                        </button>
+                        <button id="btn-studio-retranscribe-single" class="glow-button" style="width: 100%; margin-top: 10px; background: rgba(255, 165, 0, 0.15); border-color: rgba(255, 165, 0, 0.5); color: #ffa500; font-weight: 600;">
+                            <i class="fa-solid fa-magnifying-glass-plus"></i> Re-transcribir con WhisperX
                         </button>
                     </div>
 

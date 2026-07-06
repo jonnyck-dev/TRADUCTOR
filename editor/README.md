@@ -13,6 +13,13 @@ Editor interactivo no-lineal para corrección quirúrgica de videos doblados pos
 | `implementation_plan.md` | Plan de implementación: split por frase, cambios en endpoints y frontend. |
 | `bugs.md` | Bugs conocidos, desyncs y problemas pendientes. |
 
+## Características
+
+- **Split por frase individual**: Cada bloque en la timeline = 1 frase. Edición y regeneración granular.
+- **Multi-Language Support (V4.0)**: Soporte para cualquier par de idiomas origen/destino. La UI se adapta dinámicamente al idioma real detectado desde `task_meta.json`. Labels, botones y track names se muestran con los nombres correctos (ej: "Japonés / Español") en lugar de "Inglés / Español".
+- **Backward compatible**: Si no existe `task_meta.json`, el editor usa English/Spanish como defaults.
+- **Endpoint `/api/studio/{id}/meta`**: Devuelve `{source_language, target_language}` para que el frontend pueda adaptar la UI antes de cargar los datos completos.
+
 ### Dependencias externas (fuera de esta carpeta)
 
 | Archivo | Propósito |
