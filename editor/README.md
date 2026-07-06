@@ -1,4 +1,4 @@
-# AEGIS Studio Editor — Subproyecto
+# JANUS Studio Editor — Subproyecto
 
 Editor interactivo no-lineal para corrección quirúrgica de videos doblados post-procesamiento. Depende del pipeline principal del Traductor pero tiene su propia lógica, frontend y plan de desarrollo.
 

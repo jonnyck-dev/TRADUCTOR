@@ -1,4 +1,4 @@
-# Janus Audio Editor / AI Video Dubber (v4.0)
+# JANUS Audio Editor / AI Video Dubber (v4.1)
 
 Este proyecto es una aplicación web local para **traducir, doblar y editar** videos de YouTube de forma automatizada desde y hacia múltiples idiomas (Español, Inglés, Japonés, Portugués, Francés, Alemán, Italiano, Coreano, Chino). Combina transcripción (WhisperX), traducción local (Ollama), síntesis de voz (VibeVoice / VoxCPM) y edición no-lineal en un estudio interactivo, orquestado bajo una arquitectura optimizada para Windows/WSL con GPUs NVIDIA.
 
@@ -219,7 +219,7 @@ Este repositorio contiene subproyectos con su propia lógica y documentación:
 
 | Subproyecto | Carpeta | Descripción |
 |-------------|---------|-------------|
-| **AEGIS Studio Editor** | `editor/` | Editor interactivo no-lineal para corrección de videos doblados. Frontend en `frontend_studio/`. |
+| **JANUS Studio Editor** | `editor/` | Editor interactivo no-lineal para corrección de videos doblados. Frontend en `frontend_studio/`. |
 
 Cada subproyecto tiene su propio `README.md` con documentación, arquitectura, plan de implementación y bugs conocidos. Consultar la carpeta correspondiente para más detalles.
 

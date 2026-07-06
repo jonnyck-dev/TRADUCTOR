@@ -26,7 +26,7 @@ from audio_processor import sync_individual_phrases, merge_audio_video, run_demu
 import re
 import math
 
-app = FastAPI(title="JANUS Dubber API v4.0")
+app = FastAPI(title="JANUS Dubber API v4.1")
 
 # Enable CORS for development
 app.add_middleware(

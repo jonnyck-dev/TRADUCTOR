@@ -2,7 +2,7 @@
 set -e
 
 echo "=========================================================="
-echo "  AEGIS Audio Editor / AI Video Dubber"
+echo "  JANUS Audio Editor / AI Video Dubber"
 echo "  Portable Setup (Linux/WSL)"
 echo "=========================================================="
 echo ""

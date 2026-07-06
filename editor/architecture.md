@@ -4,7 +4,7 @@
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  AEGIS AUDIO EDITOR v3.0    [← Volver al Inicio] │
+│  JANUS AUDIO EDITOR v4.1    [← Volver al Inicio] │
 ├──────────────────────┬──────────────────────────┤
 │                      │  INSPECTOR               │
 │   VIDEO PLAYER       │  ┌────────────────────┐  │

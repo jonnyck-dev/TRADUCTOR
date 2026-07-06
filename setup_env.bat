@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableDelayedExpansion
 echo ==========================================================
-echo   AEGIS Audio Editor / AI Video Dubber
+echo   JANUS Audio Editor / AI Video Dubber
 echo   Instalador Portable (Windows)
 echo ==========================================================
 echo.
