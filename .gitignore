@@ -42,6 +42,16 @@ backend/.env
 .DS_Store
 Thumbs.db
 
+# Internal planning and debugging docs (AI agent context, not user-facing)
+implementation_plan.md
+debugagent.md
+deployment_plan.md
+benchmark_report.md
+editor/
+
+# Debug test scripts
+debugs/
+
 # Secret scripts
 deploy.py
 activar_cloudflare.bat

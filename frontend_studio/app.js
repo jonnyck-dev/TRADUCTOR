@@ -729,7 +729,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function openHomeView() {
-        window.close();
+        // Clear video from studio wrapper
+        if (studioVideoWrapper && videoPlayer) {
+            videoPlayer.pause();
+            videoPlayer.src = '';
+            videoPlayer.load();
+            try { studioVideoWrapper.removeChild(videoPlayer); } catch(e) {}
+            videoPlayer.classList.add('hidden');
+        }
+        if (studioAudioPlayer) {
+            studioAudioPlayer.pause();
+            studioAudioPlayer.src = '';
+        }
+        currentTaskId = null;
+        studioActiveBlock = null;
+        studioData = null;
+        if (homeView) homeView.classList.remove('hidden');
+        if (studioView) studioView.classList.add('hidden');
+        if (navHome) navHome.classList.add('active');
+        if (navStudio) navStudio.classList.remove('active');
+        if (startOverlay) startOverlay.classList.remove('hidden');
+        globalStatus.innerHTML = '<span class="dot"></span> Listo para doblar';
     }
 
     if (btnOpenStudio) btnOpenStudio.addEventListener('click', openStudioView);
