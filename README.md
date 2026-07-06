@@ -1,4 +1,4 @@
-# AEGIS Audio Editor / AI Video Dubber (v4.0)
+# Janus Audio Editor / AI Video Dubber (v4.0)
 
 Este proyecto es una aplicación web local para **traducir, doblar y editar** videos de YouTube de forma automatizada desde y hacia múltiples idiomas (Español, Inglés, Japonés, Portugués, Francés, Alemán, Italiano, Coreano, Chino). Combina transcripción (WhisperX), traducción local (Ollama), síntesis de voz (VibeVoice / VoxCPM) y edición no-lineal en un estudio interactivo, orquestado bajo una arquitectura optimizada para Windows/WSL con GPUs NVIDIA.
 
