@@ -173,78 +173,85 @@ def translate_chunks(chunks: list, model: str = "gemma4:e2b-it-qat", save_dir: s
         else:
             json_str = clean_content
 
-        # Escape internal double quotes in text fields
-        json_str = fix_json_quotes(json_str)
-        
-        # Attempt robust programmatic repair before first parse
-        json_str = repair_json_robust(json_str)
-
         translated_minimal_chunks = []
         max_attempts = 5
         current_attempt = 1
         last_error = None
         
-        while current_attempt <= max_attempts:
-            try:
-                translated_data = json.loads(json_str, strict=False)
-                translated_minimal_chunks = translated_data.get("chunks", [])
-                break
-            except json.JSONDecodeError as jde:
-                last_error = jde
-                print(f"Advertencia: Intento {current_attempt}/{max_attempts} falló con JSONDecodeError: {jde}. Solicitando auto-corrección al LLM...")
-                
-                if current_attempt == max_attempts:
-                    break
-                    
-                correction_prompt = (
-                    f"The following JSON text contains a syntax error: {jde}.\n"
-                    f"Please fix ONLY the syntax errors (such as missing commas, unescaped quotes, or unmatched brackets) "
-                    f"and return the valid corrected JSON object containing the 'chunks' key.\n"
-                    f"Do not change the translations. Return ONLY the raw corrected JSON and nothing else.\n\n"
-                    f"MALFORMED JSON:\n{json_str}"
-                )
-                payload_correction = {
-                    "model": model,
-                    "messages": [
-                        {"role": "user", "content": correction_prompt}
-                    ],
-                    "stream": False,
-                    "format": "json",
-                    "options": {
-                        "num_ctx": 128000,
-                        "num_predict": 32768,
-                        "temperature": 0.0
-                    }
-                }
+        # Try parsing raw JSON first (before any repair)
+        try:
+            translated_data = json.loads(json_str, strict=False)
+            translated_minimal_chunks = translated_data.get("chunks", [])
+            print("JSON parseado exitosamente sin reparación.")
+        except json.JSONDecodeError as jde:
+            print(f"JSON crudo inválido: {jde}. Aplicando reparación programática...")
+            json_str = fix_json_quotes(json_str)
+            json_str = repair_json_robust(json_str)
+        
+        # If still not parsed, enter correction loop
+        if not translated_minimal_chunks:
+            while current_attempt <= max_attempts:
                 try:
-                    corr_result = call_ollama_api(url, payload_correction, timeout=180)
-                    corr_content = corr_result.get("message", {}).get("content", "").strip()
+                    translated_data = json.loads(json_str, strict=False)
+                    translated_minimal_chunks = translated_data.get("chunks", [])
+                    break
+                except json.JSONDecodeError as jde:
+                    last_error = jde
+                    print(f"Advertencia: Intento {current_attempt}/{max_attempts} falló con JSONDecodeError: {jde}.")
                     
-                    # Clean think tags and markdown
-                    if "<think>" in corr_content:
-                        corr_content = re.sub(r'<think>.*?</think>', '', corr_content, flags=re.DOTALL).strip()
+                    if current_attempt == max_attempts:
+                        break
                     
-                    clean_corr = corr_content
-                    if clean_corr.startswith("```"):
-                        clean_corr = re.sub(r'^```(?:json)?\s*', '', clean_corr)
-                    if clean_corr.endswith("```"):
-                        clean_corr = re.sub(r'\s*```$', '', clean_corr)
-                    
-                    start_corr = clean_corr.find('{')
-                    end_corr = clean_corr.rfind('}')
-                    if start_corr != -1 and end_corr != -1:
-                        json_str = clean_corr[start_corr:end_corr+1]
-                    else:
-                        json_str = clean_corr
-                        
-                    # Also fix unescaped double quotes on LLM-corrected JSON string
+                    # Apply repair functions before asking LLM
                     json_str = fix_json_quotes(json_str)
                     json_str = repair_json_robust(json_str)
-                except Exception as e_corr:
-                    print(f"Error al enviar consulta de corrección en intento {current_attempt}: {e_corr}")
-                    raise jde
                     
-                current_attempt += 1
+                    print(f"Solicitando auto-corrección al LLM...")
+                    correction_prompt = (
+                        f"The following JSON text contains a syntax error: {jde}.\n"
+                        f"Please fix ONLY the syntax errors (such as missing commas, unescaped quotes, or unmatched brackets) "
+                        f"and return the valid corrected JSON object containing the 'chunks' key.\n"
+                        f"Do not change the translations. Return ONLY the raw corrected JSON and nothing else.\n\n"
+                        f"MALFORMED JSON:\n{json_str}"
+                    )
+                    payload_correction = {
+                        "model": model,
+                        "messages": [
+                            {"role": "user", "content": correction_prompt}
+                        ],
+                        "stream": False,
+                        "format": "json",
+                        "options": {
+                            "num_ctx": 128000,
+                            "num_predict": 32768,
+                            "temperature": 0.0
+                        }
+                    }
+                    try:
+                        corr_result = call_ollama_api(url, payload_correction, timeout=180)
+                        corr_content = corr_result.get("message", {}).get("content", "").strip()
+                        
+                        # Clean think tags and markdown
+                        if "<think>" in corr_content:
+                            corr_content = re.sub(r'<think>.*?</think>', '', corr_content, flags=re.DOTALL).strip()
+                        
+                        clean_corr = corr_content
+                        if clean_corr.startswith("```"):
+                            clean_corr = re.sub(r'^```(?:json)?\s*', '', clean_corr)
+                        if clean_corr.endswith("```"):
+                            clean_corr = re.sub(r'\s*```$', '', clean_corr)
+                        
+                        start_corr = clean_corr.find('{')
+                        end_corr = clean_corr.rfind('}')
+                        if start_corr != -1 and end_corr != -1:
+                            json_str = clean_corr[start_corr:end_corr+1]
+                        else:
+                            json_str = clean_corr
+                    except Exception as e_corr:
+                        print(f"Error al enviar consulta de corrección en intento {current_attempt}: {e_corr}")
+                        raise jde
+                        
+                    current_attempt += 1
                 
         if not translated_minimal_chunks and last_error:
             print(f"Fallo crítico: No se pudo auto-corregir el JSON de traducción tras {max_attempts} intentos.")
