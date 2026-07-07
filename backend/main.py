@@ -486,6 +486,7 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, t
             
         # 2b. Preprocess Chunks (split segments exceeding 120s duration, merge short ones)
         orig_chunks = orig_data.get("chunks", [])
+        orig_chunks = split_chunks_at_pauses(orig_chunks, source_language)
         preprocessed_chunks = merge_short_chunks(orig_chunks, source_language=source_language)
         preprocessed_chunks = preprocess_chunks(preprocessed_chunks)
         

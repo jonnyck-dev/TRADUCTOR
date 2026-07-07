@@ -18,6 +18,77 @@ def wsl_to_windows_path(wsl_path: str) -> str:
         print(f"Error converting path {wsl_path} with wslpath: {e}")
         return wsl_path
 
+def is_cjk_language(lang: str) -> bool:
+    return lang.lower() in ("japanese", "chinese", "korean", "ja", "zh", "ko")
+
+def split_chunks_at_pauses(chunks: list, language: str = "English") -> list:
+    """
+    Splits chunks at sentence boundaries detected by long-duration punctuation tokens.
+    Only applies to CJK languages (Japanese, Chinese, Korean) where WhisperX
+    tends to merge sentences into single segments due to character-based alignment.
+    
+    Heuristic: Punctuation tokens (?, !, ., 。, ？, ！) with duration >= 1.0s
+    indicate sentence boundaries.
+    """
+    if not is_cjk_language(language):
+        return chunks
+    
+    SENTENCE_END_PUNCT = {'?', '!', '.', '。', '？', '！'}
+    PAUSE_THRESHOLD = 1.0  # seconds
+    
+    new_chunks = []
+    for chunk in chunks:
+        words = chunk.get("words", [])
+        if len(words) < 2:
+            new_chunks.append(chunk)
+            continue
+        
+        # Find sentence-ending punctuation with long duration
+        split_indices = []
+        for i, w in enumerate(words):
+            word_text = w.get("word", "")
+            if not word_text:
+                continue
+            
+            # Check if word is or ends with sentence-ending punctuation
+            if word_text in SENTENCE_END_PUNCT or (len(word_text) > 1 and word_text[-1] in SENTENCE_END_PUNCT):
+                duration = w["end"] - w["start"]
+                if duration >= PAUSE_THRESHOLD:
+                    split_indices.append(i + 1)  # split AFTER this token
+        
+        if not split_indices:
+            new_chunks.append(chunk)
+            continue
+        
+        print(f"[CJK Pause Split] Splitting chunk at indices {split_indices} (threshold: {PAUSE_THRESHOLD}s)")
+        
+        # Split into segments
+        prev_idx = 0
+        for sp in split_indices:
+            seg_words = words[prev_idx:sp]
+            if not seg_words:
+                prev_idx = sp
+                continue
+            seg_text = "".join(w.get("word", "") for w in seg_words)
+            new_chunks.append({
+                "timestamp": [seg_words[0]["start"], seg_words[-1]["end"]],
+                "text": seg_text,
+                "words": seg_words
+            })
+            prev_idx = sp
+        
+        # Last segment
+        if prev_idx < len(words):
+            seg_words = words[prev_idx:]
+            seg_text = "".join(w.get("word", "") for w in seg_words)
+            new_chunks.append({
+                "timestamp": [seg_words[0]["start"], seg_words[-1]["end"]],
+                "text": seg_text,
+                "words": seg_words
+            })
+    
+    return new_chunks
+
 def transcribe_audio(audio_path: str, output_json_path: str, language: str = "English", model_name: str = None) -> dict:
     """
     Transcribes audio using WhisperX to get high-precision segment and word-level timestamps.
