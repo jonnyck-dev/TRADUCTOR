@@ -1529,7 +1529,7 @@ class RetranscribeRequest(BaseModel):
 
 class TranslateRequest(BaseModel):
     phrase_index: int
-    text: str
+    text: str = ""
     source_language: str = "English"
     target_language: str = "Spanish"
     model: str = "gemma4:e2b-it-qat"

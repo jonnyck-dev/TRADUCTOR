@@ -1123,7 +1123,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Clear timelines
             document.getElementById('track-english').innerHTML = '';
             document.getElementById('track-dubbed').innerHTML = '';
-            document.getElementById('track-video').innerHTML = '<div class="timeline-block video-block" style="width: 100%;"></div>';
+            document.getElementById('track-video-dubbed').innerHTML = '<div class="timeline-block video-block" style="width: 100%;"></div>';
         }
     }
 
@@ -1814,7 +1814,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
             })
             .then(res => {
-                if (!res.ok) return res.json().then(e => { throw new Error(e.detail || 'Error del servidor'); });
+                if (!res.ok) return res.json().then(e => { const msg = Array.isArray(e.detail) ? e.detail.map(d => d.msg).join('; ') : (e.detail || 'Error del servidor'); throw new Error(msg); });
                 return res.json();
             })
             .then(data => {
