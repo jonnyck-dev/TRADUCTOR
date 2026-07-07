@@ -808,10 +808,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Auto play or redirect to Studio
-        revealStudioButton();
         if (openStudioOnLoad) {
             openStudioOnLoad = false;
-            if (btnOpenStudio) btnOpenStudio.click();
+            openStudioView();
         } else {
             videoPlayer.play();
         }
@@ -944,7 +943,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     // STUDIO v3.0 LOGIC
     // ==========================================
-    const btnOpenStudio = document.getElementById('btn-open-studio');
     const btnCloseStudio = document.getElementById('btn-close-studio');
     const selectStudioCache = document.getElementById('select-studio-cache');
     const btnStudioLoadCache = document.getElementById('btn-studio-load-cache');
@@ -1013,13 +1011,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const rangeGapInfo = document.getElementById('range-gap-info');
     const btnRetranscribe = document.getElementById('btn-studio-retranscribe');
     const btnClearRange = document.getElementById('btn-clear-range');
-
-    // Show Studio Button when task finishes
-    function revealStudioButton() {
-        if (currentTaskId) {
-            btnOpenStudio.classList.remove('hidden');
-        }
-    }
 
     function loadStudioModels() {
         if (!selectStudioModel) return;
@@ -1180,7 +1171,6 @@ document.addEventListener('DOMContentLoaded', () => {
             .catch(err => console.error("Error cargando cachés para estudio:", err));
     }
 
-    if (btnOpenStudio) btnOpenStudio.addEventListener('click', openStudioView);
     if (navStudio) navStudio.addEventListener('click', openStudioView);
     
     if (btnCloseStudio) btnCloseStudio.addEventListener('click', openHomeView);

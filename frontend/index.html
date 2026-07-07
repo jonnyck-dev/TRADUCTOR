@@ -34,9 +34,6 @@
                     <button id="btn-new" class="glow-button hidden" style="padding: 6px 12px; font-size: 13px; height: 32px; min-width: auto; margin: 0; background: linear-gradient(135deg, rgba(157, 78, 221, 0.4) 0%, rgba(0, 242, 254, 0.3) 100%); border: 1px solid rgba(255, 255, 255, 0.1);">
                         <i class="fa-solid fa-plus"></i> Nuevo
                     </button>
-                    <button id="btn-open-studio" class="glow-button hidden" style="padding: 6px 12px; font-size: 13px; height: 32px; min-width: auto; margin: 0; background: linear-gradient(135deg, rgba(0, 242, 254, 0.4) 0%, rgba(157, 78, 221, 0.3) 100%); border: 1px solid rgba(0, 242, 254, 0.3);">
-                        <i class="fa-solid fa-scissors"></i> Estudio v3.0
-                    </button>
                     <div class="status-indicator" id="global-status">
                          <span class="dot"></span> Listo para doblar
                      </div>
@@ -340,8 +337,10 @@
                  <h1>JANUS AUDIO EDITOR</h1>
                  <span class="badge" style="background: rgba(212, 168, 83, 0.15); color: var(--accent-gold-dark);">v3.0</span>
             </div>
-            <button id="btn-close-studio" class="glow-button"><i class="fa-solid fa-arrow-left"></i> Volver al Inicio</button>
-            <button id="btn-studio-load-other" class="glow-button" style="background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); margin-left: 10px;"><i class="fa-solid fa-folder-open"></i> Cargar Otro Video</button>
+            <div style="margin-left: auto; display: flex; gap: 10px;">
+                <button id="btn-studio-load-other" class="glow-button" style="background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1);"><i class="fa-solid fa-folder-open"></i> Cargar Otro Video</button>
+                <button id="btn-close-studio" class="glow-button"><i class="fa-solid fa-arrow-left"></i> Volver al Inicio</button>
+            </div>
         </header>
 
         <div class="studio-workspace">
