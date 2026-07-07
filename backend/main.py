@@ -19,7 +19,7 @@ except ImportError:
     pass
 
 # Import our modular clients
-from whisper_client import transcribe_audio
+from whisper_client import transcribe_audio, split_chunks_at_pauses
 from translator import translate_chunks
 from tts_client import generate_individual_tts, remove_cancelled_task, cancel_task
 from audio_processor import sync_individual_phrases, merge_audio_video, run_demucs_separation, mix_voice_and_background
@@ -1324,7 +1324,7 @@ def retranscribe_studio_gap(task_id: str, req: RetranscribeRequest):
     Inserts new phrases and re-indexes TTS audio files.
     """
     from audio_processor import get_flat_timestamp
-    from whisper_client import transcribe_audio
+    from whisper_client import transcribe_audio, split_chunks_at_pauses
     import subprocess
     import shutil
     import json
