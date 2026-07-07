@@ -1870,9 +1870,15 @@ def finalize_studio_video(task_id: str, background_tasks: BackgroundTasks):
     verification_report = os.path.join(CACHE_DIR, task_id, "whisper", "verification_report.json")
     
     if os.path.exists(output_video):
-        os.remove(output_video)
+        try:
+            os.remove(output_video)
+        except PermissionError:
+            pass  # File in use by streaming, will be overwritten by new render
     if os.path.exists(verification_report):
-        os.remove(verification_report)
+        try:
+            os.remove(verification_report)
+        except PermissionError:
+            pass
     
     # Load parameters from task_meta.json
     meta_path = os.path.join(CACHE_DIR, task_id, "task_meta.json")
