@@ -135,10 +135,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 selectCache.appendChild(opt);
                 return;
             }
-            data.caches.forEach(cacheId => {
+            data.caches.forEach(cache => {
                 const opt = document.createElement('option');
-                opt.value = cacheId;
-                opt.textContent = cacheId;
+                opt.value = cache.id;
+                // Mostrar metadatos si existen
+                if (cache.meta) {
+                    const srcLang = cache.meta.source_language || 'English';
+                    const tgtLang = cache.meta.target_language || 'Spanish';
+                    opt.textContent = `${cache.id} (${srcLang} → ${tgtLang})`;
+                } else {
+                    opt.textContent = cache.id;
+                }
                 selectCache.appendChild(opt);
             });
         })
@@ -957,14 +964,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (btnStudioFinalize) btnStudioFinalize.addEventListener('click', () => {
         if (!currentTaskId) return;
-        if (confirm("Se preparará el ensamblaje final. Deberás presionar 'Volver' y luego darle a Simular con Caché Local para que arme el video. ¿Continuar?")) {
+        if (confirm("Se ensamblará el video final con los cambios actuales. ¿Continuar?")) {
+            btnStudioFinalize.disabled = true;
+            btnStudioFinalize.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Ensamblando...';
+            
             fetch(`/api/studio/${currentTaskId}/finalize`, { method: 'POST' })
             .then(res => res.json())
             .then(data => {
-                alert(data.message);
-                if (btnCloseStudio) btnCloseStudio.click();
+                // Redirect to main page which will show processing
+                localStorage.setItem('janus_taskId', currentTaskId);
+                window.location.href = '/';
             })
-            .catch(err => alert('Error finalizing: ' + err));
+            .catch(err => {
+                alert('Error finalizando: ' + err);
+                btnStudioFinalize.disabled = false;
+                btnStudioFinalize.innerHTML = '<i class="fa-solid fa-film"></i> Ensamblar Video Final';
+            });
         }
     });
 

@@ -989,6 +989,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnStudioDelete = document.getElementById('btn-studio-delete');
     const studioAudioPlayer = document.getElementById('studio-audio-player');
     const btnStudioFinalize = document.getElementById('btn-studio-finalize');
+    const btnStudioSplit = document.getElementById('btn-studio-split');
 
     let studioActiveBlock = null;
     let studioData = null;
@@ -1152,9 +1153,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     : '<option value="">Seleccionar Caché para Cargar...</option>';
                 caches.forEach(c => {
                     const option = document.createElement('option');
-                    option.value = c;
-                    option.textContent = c;
-                    if (c === currentTaskId) option.selected = true;
+                    option.value = c.id;
+                    // Mostrar metadatos si existen
+                    if (c.meta) {
+                        const srcLang = c.meta.source_language || 'English';
+                        const tgtLang = c.meta.target_language || 'Spanish';
+                        option.textContent = `${c.id} (${srcLang} → ${tgtLang})`;
+                    } else {
+                        option.textContent = c.id;
+                    }
+                    if (c.id === currentTaskId) option.selected = true;
                     selectStudioCache.appendChild(option);
                 });
             })
@@ -1572,16 +1580,82 @@ document.addEventListener('DOMContentLoaded', () => {
 
     btnStudioFinalize.addEventListener('click', () => {
         if (!currentTaskId) return;
-        if (confirm("Se preparará el ensamblaje final. Deberás presionar 'Volver' y luego darle a Simular con Caché Local para que arme el video. ¿Continuar?")) {
+        if (confirm("Se ensamblará el video final con los cambios actuales. ¿Continuar?")) {
+            btnStudioFinalize.disabled = true;
+            btnStudioFinalize.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Ensamblando...';
+            
             fetch(`/api/studio/${currentTaskId}/finalize`, { method: 'POST' })
             .then(res => res.json())
             .then(data => {
-                alert(data.message);
-                btnCloseStudio.click(); // Autoclose the studio to reveal the play button
+                // Show processing overlay and start polling
+                startOverlay.classList.add('hidden');
+                processingOverlay.classList.remove('hidden');
+                videoPlayer.classList.add('hidden');
+                btnNew.classList.add('hidden');
+                subtitlesViewport.innerHTML = '<p class="empty-subs-msg">Ensamblando video final...</p>';
+                
+                updateStatus('queued', 0);
+                startPolling(data.task_id);
             })
-            .catch(err => alert('Error finalizing: ' + err));
+            .catch(err => {
+                alert('Error finalizando: ' + err);
+                btnStudioFinalize.disabled = false;
+                btnStudioFinalize.innerHTML = '<i class="fa-solid fa-film"></i> Ensamblar Video Final';
+            });
         }
     });
+
+    // Split phrase at current video position
+    if (btnStudioSplit) {
+        btnStudioSplit.addEventListener('click', () => {
+            if (!studioActiveBlock || !currentTaskId) {
+                alert('Selecciona una frase primero.');
+                return;
+            }
+
+            const phraseIdx = studioActiveBlock.phrase_index;
+            const currentTime = videoPlayer.currentTime;
+            
+            // Get phrase boundaries
+            const phraseStart = studioActiveBlock.start;
+            const phraseEnd = studioActiveBlock.end;
+            
+            if (currentTime <= phraseStart || currentTime >= phraseEnd) {
+                alert(`Posiciona el video dentro de la frase (${phraseStart.toFixed(2)}s - ${phraseEnd.toFixed(2)}s) para dividir.`);
+                return;
+            }
+            
+            if (!confirm(`¿Dividir frase ${phraseIdx} en ${currentTime.toFixed(2)}s?`)) return;
+            
+            btnStudioSplit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Dividiendo...';
+            btnStudioSplit.disabled = true;
+            
+            fetch(`/api/studio/${currentTaskId}/split`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phrase_index: phraseIdx,
+                    split_time: currentTime
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                btnStudioSplit.innerHTML = '<i class="fa-solid fa-check"></i> ¡Dividido!';
+                setTimeout(() => {
+                    btnStudioSplit.innerHTML = '<i class="fa-solid fa-scissors"></i> Split Frase';
+                    btnStudioSplit.disabled = false;
+                }, 1500);
+                // Reload studio data
+                loadStudioData();
+            })
+            .catch(err => {
+                console.error('[Studio] Split error:', err);
+                alert('Error al dividir: ' + err.message);
+                btnStudioSplit.innerHTML = '<i class="fa-solid fa-scissors"></i> Split Frase';
+                btnStudioSplit.disabled = false;
+            });
+        });
+    }
 
     // Range selection: Clear button
     if (btnClearRange) {

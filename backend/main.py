@@ -1864,8 +1864,8 @@ def delete_studio_phrase(task_id: str, phrase_index: int):
     }
 
 @app.post("/api/studio/{task_id}/finalize")
-def finalize_studio_video(task_id: str):
-    """Prepares the project for final assembly by clearing the old video outputs."""
+def finalize_studio_video(task_id: str, background_tasks: BackgroundTasks):
+    """Clears old output and triggers full render pipeline directly."""
     output_video = os.path.join(CACHE_DIR, task_id, "video_dubbed.mp4")
     verification_report = os.path.join(CACHE_DIR, task_id, "whisper", "verification_report.json")
     
@@ -1873,8 +1873,58 @@ def finalize_studio_video(task_id: str):
         os.remove(output_video)
     if os.path.exists(verification_report):
         os.remove(verification_report)
-        
-    return {"status": "ok", "message": "Listo para ensamblar. Presiona el botón Traducir (Simular) para generar el video final."}
+    
+    # Load parameters from task_meta.json
+    meta_path = os.path.join(CACHE_DIR, task_id, "task_meta.json")
+    meta = {}
+    if os.path.exists(meta_path):
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+        except:
+            pass
+    
+    # Extract parameters with defaults
+    model = meta.get("model", "gemma4:e2b-it-qat")
+    speaker = meta.get("speaker", "en-Frank_man")
+    tts_model = meta.get("tts_model", "openbmb/VoxCPM2")
+    whisper_model = meta.get("whisper_model", "large-v3-turbo")
+    tts_cfg = meta.get("tts_cfg", 2.0)
+    tts_steps = meta.get("tts_steps", 10)
+    tts_mode = meta.get("tts_mode", "sentence")
+    batch_size = meta.get("batch_size", 1)
+    sync_size = meta.get("sync_size", 1)
+    source_language = meta.get("source_language", "English")
+    target_language = meta.get("target_language", "Spanish")
+    
+    # Initialize task status
+    remove_cancelled_task(task_id)
+    tasks[task_id] = {
+        "status": "queued",
+        "progress": 0,
+        "error": None,
+        "result": None
+    }
+    
+    # Start full render pipeline in background
+    background_tasks.add_task(
+        process_translation_task,
+        task_id,
+        f"cache:{task_id}",
+        model,
+        speaker,
+        tts_model,
+        whisper_model,
+        tts_cfg,
+        tts_steps,
+        tts_mode,
+        batch_size,
+        sync_size,
+        source_language,
+        target_language
+    )
+    
+    return {"status": "ok", "task_id": task_id, "message": "Ensamblando video..."}
 
 # Mount video cache directory
 app.mount("/cache", StaticFiles(directory=CACHE_DIR), name="cache")
