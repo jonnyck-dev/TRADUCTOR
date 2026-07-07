@@ -1204,6 +1204,138 @@ class ReprocessRequest(BaseModel):
     tts_cfg: float
     tts_steps: int
 
+class SplitRequest(BaseModel):
+    phrase_index: int
+    split_time: float
+
+@app.post("/api/studio/{task_id}/split")
+def split_studio_phrase(task_id: str, req: SplitRequest):
+    """
+    Splits a phrase at the specified time, creating two new phrases.
+    The text is split proportionally based on word timestamps if available,
+    otherwise split at the midpoint of the text.
+    """
+    import shutil
+    
+    enhanced_json = get_latest_script_path(task_id)
+    if not enhanced_json:
+        raise HTTPException(status_code=404, detail="Cache script not found")
+        
+    with open(enhanced_json, "r", encoding="utf-8") as f:
+        data = json.load(f)
+        
+    chunks = data.get("chunks", [])
+    if not chunks:
+        raise HTTPException(status_code=400, detail="JSON script has no chunks")
+        
+    if req.phrase_index < 0 or req.phrase_index >= len(chunks):
+        raise HTTPException(status_code=400, detail="Invalid phrase index")
+        
+    chunk = chunks[req.phrase_index]
+    from audio_processor import get_flat_timestamp
+    ts = get_flat_timestamp(chunk.get("timestamp", [0.0, 0.0]))
+    start_time = ts[0]
+    end_time = ts[1]
+    
+    if req.split_time <= start_time or req.split_time >= end_time:
+        raise HTTPException(status_code=400, detail="Split time must be within the phrase boundaries")
+    
+    # Split the text proportionally
+    text = chunk.get("text", "").strip()
+    words = chunk.get("words", [])
+    
+    if words:
+        # Use word timestamps to split text
+        split_words_1 = []
+        split_words_2 = []
+        for w in words:
+            if w["end"] <= req.split_time:
+                split_words_1.append(w)
+            elif w["start"] >= req.split_time:
+                split_words_2.append(w)
+            else:
+                # Word straddles the split point
+                if w["start"] - start_time < req.split_time - start_time:
+                    split_words_1.append(w)
+                else:
+                    split_words_2.append(w)
+        
+        text_1 = "".join(w.get("word", "") for w in split_words_1)
+        text_2 = "".join(w.get("word", "") for w in split_words_2)
+    else:
+        # Fallback: split text at midpoint
+        mid = len(text) // 2
+        text_1 = text[:mid]
+        text_2 = text[mid:]
+    
+    # Create two new chunks
+    chunk_1 = dict(chunk)
+    chunk_1["text"] = text_1
+    chunk_1["timestamp"] = [start_time, req.split_time]
+    if words:
+        chunk_1["words"] = [w for w in words if w["end"] <= req.split_time]
+    
+    chunk_2 = dict(chunk)
+    chunk_2["text"] = text_2
+    chunk_2["timestamp"] = [req.split_time, end_time]
+    if words:
+        chunk_2["words"] = [w for w in words if w["start"] >= req.split_time]
+    
+    # Replace the original chunk with the two new chunks
+    chunks[req.phrase_index:req.phrase_index+1] = [chunk_1, chunk_2]
+    data["chunks"] = chunks
+    
+    # Re-index phrase_index properties
+    for i, c in enumerate(data.get("chunks", [])):
+        c["phrase_index"] = i
+    
+    # Save the updated JSON script
+    with open(enhanced_json, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    
+    # Shift TTS audio files: phrase_N -> phrase_N+1 for N >= phrase_index+1
+    tts_dir = os.path.join(CACHE_DIR, task_id, "tts")
+    if os.path.exists(tts_dir):
+        # Collect existing files
+        existing_files = []
+        for f_name in os.listdir(tts_dir):
+            if (f_name.startswith("phrase_") or f_name.startswith("ref_")) and (f_name.endswith(".mp3") or f_name.endswith(".wav")):
+                try:
+                    parts = f_name.split("_")
+                    idx = int(parts[1].split(".")[0])
+                    ext = "." + parts[1].split(".")[1]
+                    prefix = parts[0] + "_"
+                    existing_files.append((idx, ext, prefix, f_name))
+                except:
+                    pass
+        
+        # Sort descending to avoid collision when shifting up
+        existing_files.sort(key=lambda x: x[0], reverse=True)
+        
+        for idx, ext, prefix, f_name in existing_files:
+            if idx >= req.phrase_index + 1:
+                old_path = os.path.join(tts_dir, f_name)
+                new_name = f"{prefix}{idx + 1}{ext}"
+                new_path = os.path.join(tts_dir, new_name)
+                if os.path.exists(old_path):
+                    shutil.move(old_path, new_path)
+    
+    return {
+        "status": "ok",
+        "message": f"Phrase {req.phrase_index} split at {req.split_time:.2f}s",
+        "new_phrases": [
+            {"phrase_index": req.phrase_index, "text": text_1, "start_time": start_time, "end_time": req.split_time},
+            {"phrase_index": req.phrase_index + 1, "text": text_2, "start_time": req.split_time, "end_time": end_time}
+        ],
+        "total_phrases": len(data["chunks"])
+    }
+
+class TranslateRequest(BaseModel):
+    phrase_index: int
+    text: str
+    source_language: str = "English"
+    target_language: str = "Spanish"
+
 def get_latest_script_path(task_id: str, target_language: str = None):
     whisper_dir = os.path.join(CACHE_DIR, task_id, "whisper")
     
@@ -1397,6 +1529,7 @@ class RetranscribeRequest(BaseModel):
 
 class TranslateRequest(BaseModel):
     phrase_index: int
+    text: str
     source_language: str = "English"
     target_language: str = "Spanish"
     model: str = "gemma4:e2b-it-qat"

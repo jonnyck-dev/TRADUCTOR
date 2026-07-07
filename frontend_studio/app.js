@@ -690,6 +690,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnStudioFinalize = document.getElementById('btn-studio-finalize');
     const selectStudioSourceLang = document.getElementById('select-studio-source-lang');
     const btnRetranscribeSingle = document.getElementById('btn-studio-retranscribe-single');
+    const btnStudioSplit = document.getElementById('btn-studio-split');
     const lblTranscript = document.getElementById('lbl-transcript');
 
     let studioActiveBlock = null;
@@ -1016,6 +1017,63 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('Error re-transcribiendo: ' + err.message);
                 btnRetranscribeSingle.innerHTML = '<i class="fa-solid fa-magnifying-glass-plus"></i> Re-transcribir con WhisperX';
                 btnRetranscribeSingle.disabled = false;
+            });
+        });
+    }
+
+    // Split phrase at current video position
+    if (btnStudioSplit) {
+        btnStudioSplit.addEventListener('click', () => {
+            if (!studioActiveBlock || !currentTaskId) {
+                alert('Selecciona una frase primero.');
+                return;
+            }
+            if (!videoPlayer || !videoPlayer.currentTime) {
+                alert('El video no está listo.');
+                return;
+            }
+
+            const currentTime = videoPlayer.currentTime;
+            const phraseStart = studioActiveBlock.start_time;
+            const phraseEnd = studioActiveBlock.end_time;
+
+            if (currentTime <= phraseStart || currentTime >= phraseEnd) {
+                alert(`El tiempo actual (${formatTime(currentTime)}) debe estar dentro de la frase (${formatTime(phraseStart)} - ${formatTime(phraseEnd)}).`);
+                return;
+            }
+
+            if (!confirm(`¿Dividir la frase en ${formatTime(currentTime)}?`)) {
+                return;
+            }
+
+            btnStudioSplit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Dividiendo...';
+            btnStudioSplit.disabled = true;
+
+            fetch(`/api/studio/${currentTaskId}/split`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phrase_index: studioActiveBlock.phrase_index,
+                    split_time: currentTime
+                })
+            })
+            .then(res => {
+                if (!res.ok) return res.json().then(e => { throw new Error(e.detail || 'Error del servidor'); });
+                return res.json();
+            })
+            .then(data => {
+                btnStudioSplit.innerHTML = `<i class="fa-solid fa-check"></i> ¡Dividido!`;
+                loadStudioData();
+                setTimeout(() => {
+                    btnStudioSplit.innerHTML = '<i class="fa-solid fa-scissors"></i> Split en Posición Actual';
+                    btnStudioSplit.disabled = false;
+                }, 3000);
+            })
+            .catch(err => {
+                console.error('[Studio] Split error:', err);
+                alert('Error dividiendo frase: ' + err.message);
+                btnStudioSplit.innerHTML = '<i class="fa-solid fa-scissors"></i> Split en Posición Actual';
+                btnStudioSplit.disabled = false;
             });
         });
     }
