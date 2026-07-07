@@ -990,6 +990,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const studioAudioPlayer = document.getElementById('studio-audio-player');
     const btnStudioFinalize = document.getElementById('btn-studio-finalize');
     const btnStudioSplit = document.getElementById('btn-studio-split');
+    const btnStudioLoadOther = document.getElementById('btn-studio-load-other');
 
     let studioActiveBlock = null;
     let studioData = null;
@@ -1184,6 +1185,27 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (btnCloseStudio) btnCloseStudio.addEventListener('click', openHomeView);
     if (navHome) navHome.addEventListener('click', openHomeView);
+
+    // "Cargar Otro Video" - reset studio to cache selection
+    if (btnStudioLoadOther) {
+        btnStudioLoadOther.addEventListener('click', () => {
+            videoPlayer.pause();
+            videoPlayer.src = '';
+            videoPlayer.classList.add('hidden');
+            currentTaskId = null;
+            localStorage.removeItem('janus_taskId');
+            localStorage.removeItem('janus_taskUrl');
+            studioActiveBlock = null;
+            document.getElementById('inspector-block-name').innerHTML = 'Selecciona un bloque de audio en la línea de tiempo inferior...';
+            document.getElementById('inspector-content').classList.add('hidden');
+            document.getElementById('track-english').innerHTML = '';
+            document.getElementById('track-dubbed').innerHTML = '';
+            document.getElementById('track-video-dubbed').innerHTML = '<div class="timeline-block video-block" style="width: 100%;"></div>';
+            const cacheOverlay = document.getElementById('studio-cache-overlay');
+            if (cacheOverlay) cacheOverlay.classList.remove('hidden');
+            loadStudioCaches();
+        });
+    }
 
     if (btnStudioLoadCache) {
         btnStudioLoadCache.addEventListener('click', () => {
