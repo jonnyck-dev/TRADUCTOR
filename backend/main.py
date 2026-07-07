@@ -1332,7 +1332,7 @@ def split_studio_phrase(task_id: str, req: SplitRequest):
 
 class TranslateRequest(BaseModel):
     phrase_index: int
-    text: str
+    text: str = ""
     source_language: str = "English"
     target_language: str = "Spanish"
 
