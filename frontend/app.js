@@ -235,10 +235,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 selectCache.appendChild(opt);
                 return;
             }
-            data.caches.forEach(cacheId => {
+            data.caches.forEach(cache => {
                 const opt = document.createElement('option');
-                opt.value = cacheId;
-                opt.textContent = cacheId;
+                opt.value = cache.id;
+                // Mostrar metadatos si existen
+                if (cache.meta) {
+                    const srcLang = cache.meta.source_language || 'English';
+                    const tgtLang = cache.meta.target_language || 'Spanish';
+                    opt.textContent = `${cache.id} (${srcLang} → ${tgtLang})`;
+                } else {
+                    opt.textContent = cache.id;
+                }
+                // Guardar metadatos como data attribute
+                opt.dataset.meta = JSON.stringify(cache.meta || {});
                 selectCache.appendChild(opt);
             });
         })
@@ -247,6 +256,78 @@ document.addEventListener('DOMContentLoaded', () => {
             selectCache.innerHTML = '<option value="">Error al cargar cachés</option>';
         });
     }
+    
+    // Auto-poblar parámetros al seleccionar una caché
+    selectCache.addEventListener('change', () => {
+        const selectedOption = selectCache.options[selectCache.selectedIndex];
+        if (!selectedOption || !selectedOption.dataset.meta) return;
+        
+        try {
+            const meta = JSON.parse(selectedOption.dataset.meta);
+            if (!meta || Object.keys(meta).length === 0) return;
+            
+            // Auto-poblar idiomas
+            if (meta.source_language && selectSourceLang) {
+                selectSourceLang.value = meta.source_language;
+            }
+            if (meta.target_language && selectTargetLang) {
+                selectTargetLang.value = meta.target_language;
+            }
+            
+            // Auto-poblar modelo Ollama
+            if (meta.model && selectModel) {
+                selectModel.value = meta.model;
+            }
+            
+            // Auto-poblar modelo Whisper
+            if (meta.whisper_model && selectWhisperModel) {
+                selectWhisperModel.value = meta.whisper_model;
+            }
+            
+            // Auto-poblar modelo TTS
+            if (meta.tts_model && selectTtsModel) {
+                selectTtsModel.value = meta.tts_model;
+            }
+            
+            // Auto-poblar speaker
+            if (meta.speaker && selectSpeaker) {
+                selectSpeaker.value = meta.speaker;
+            }
+            
+            // Auto-poblar batch_size
+            if (meta.batch_size !== undefined && inputBatchSize) {
+                inputBatchSize.value = meta.batch_size;
+                if (valBatchSize) valBatchSize.textContent = meta.batch_size;
+            }
+            
+            // Auto-poblar sync_size
+            if (meta.sync_size !== undefined && inputSyncSize) {
+                inputSyncSize.value = meta.sync_size;
+                if (valSyncSize) valSyncSize.textContent = meta.sync_size;
+            }
+            
+            // Auto-poblar tts_cfg
+            if (meta.tts_cfg !== undefined && inputTtsCfg) {
+                inputTtsCfg.value = meta.tts_cfg;
+                if (valTtsCfg) valTtsCfg.textContent = meta.tts_cfg;
+            }
+            
+            // Auto-poblar tts_steps
+            if (meta.tts_steps !== undefined && inputTtsSteps) {
+                inputTtsSteps.value = meta.tts_steps;
+                if (valTtsSteps) valTtsSteps.textContent = meta.tts_steps;
+            }
+            
+            // Auto-poblar tts_mode
+            if (meta.tts_mode && selectTtsMode) {
+                selectTtsMode.value = meta.tts_mode;
+            }
+            
+            console.log('[Cache] Parámetros auto-poblados desde caché:', meta);
+        } catch (e) {
+            console.error('[Cache] Error al parsear metadatos:', e);
+        }
+    });
 
     // Fetch Ollama models dynamically and group them
     function loadOllamaModels() {

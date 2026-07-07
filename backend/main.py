@@ -451,6 +451,73 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, t
         os.makedirs(tts_dir, exist_ok=True)
         os.makedirs(audio_sep_dir, exist_ok=True)
         
+        # Guardar metadatos de la tarea al inicio (para persistir parámetros)
+        meta_path = os.path.join(output_dir, "task_meta.json")
+        current_params = {
+            "source_language": source_language,
+            "target_language": target_language,
+            "model": model,
+            "whisper_model": whisper_model,
+            "tts_model": tts_model,
+            "speaker": speaker,
+            "batch_size": batch_size,
+            "sync_size": sync_size,
+            "tts_cfg": tts_cfg,
+            "tts_steps": tts_steps,
+            "tts_mode": tts_mode
+        }
+        
+        # Detectar conflictos de parámetros y invalidar caché si es necesario
+        if os.path.exists(meta_path):
+            try:
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    old_params = json.load(f)
+                
+                # Si cambió source_language o target_language, invalidar archivos de caché
+                if old_params.get("source_language") != source_language or old_params.get("target_language") != target_language:
+                    print(f"[Cache] Conflicto de idioma detectado: {old_params.get('source_language')}→{old_params.get('target_language')} vs {source_language}→{target_language}")
+                    print("[Cache] Invalidando archivos de caché anteriores...")
+                    # Eliminar archivos de whisper (transcripción y traducción)
+                    import glob
+                    for pattern in ["*_whisper.json", "*_minimal.json", "*_1_translated.json", "*_2_enhanced.json", "*_3_phonetic.json", "*_4_final.json", "*_translated.json", "*_enhanced.json"]:
+                        for file_path in glob.glob(os.path.join(whisper_dir, pattern)):
+                            try:
+                                os.remove(file_path)
+                                print(f"  Eliminado: {os.path.basename(file_path)}")
+                            except Exception as e:
+                                print(f"  Error al eliminar {file_path}: {e}")
+                    # Eliminar archivos de TTS
+                    for file_path in glob.glob(os.path.join(tts_dir, "phrase_*.mp3")) + glob.glob(os.path.join(tts_dir, "phrase_*.wav")):
+                        try:
+                            os.remove(file_path)
+                        except Exception as e:
+                            print(f"  Error al eliminar {file_path}: {e}")
+                    # Eliminar render_state.json
+                    render_state_path = os.path.join(tts_dir, "render_state.json")
+                    if os.path.exists(render_state_path):
+                        try:
+                            os.remove(render_state_path)
+                        except Exception as e:
+                            print(f"  Error al eliminar render_state.json: {e}")
+                    # Eliminar video_dubbed.mp4 si existe
+                    video_dubbed_path = os.path.join(output_dir, "video_dubbed.mp4")
+                    if os.path.exists(video_dubbed_path):
+                        try:
+                            os.remove(video_dubbed_path)
+                        except Exception as e:
+                            print(f"  Error al eliminar video_dubbed.mp4: {e}")
+                else:
+                    print(f"[Cache] Parámetros de idioma coinciden: {source_language}→{target_language}")
+            except Exception as e:
+                print(f"[Cache] Error al leer task_meta.json anterior: {e}")
+        
+        # Guardar parámetros actuales
+        try:
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump(current_params, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"Warning: Failed to save task_meta.json at start: {e}")
+        
         # 1. Download YouTube Video & Extract Audio
         t0 = time.time()
         tasks[task_id]["status"] = "downloading"
@@ -486,9 +553,11 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, t
             
         # 2b. Preprocess Chunks (split segments exceeding 120s duration, merge short ones)
         orig_chunks = orig_data.get("chunks", [])
+        # Primero mergear chunks cortos de WhisperX
+        orig_chunks = merge_short_chunks(orig_chunks, source_language=source_language)
+        # Luego dividir en pausas CJK (después del merge para que los chunks divididos se preserven)
         orig_chunks = split_chunks_at_pauses(orig_chunks, source_language)
-        preprocessed_chunks = merge_short_chunks(orig_chunks, source_language=source_language)
-        preprocessed_chunks = preprocess_chunks(preprocessed_chunks)
+        preprocessed_chunks = preprocess_chunks(orig_chunks)
         
         # 3. Translate JSON to Spanish using Ollama
         t0 = time.time()
@@ -1097,9 +1166,27 @@ def list_available_caches(studio: bool = False):
             if os.path.isdir(task_dir) and entry != "benchmark_runs":
                 if studio:
                     if os.path.exists(os.path.join(task_dir, "video_dubbed.mp4")):
-                        valid_caches.append(entry)
+                        # Leer metadatos si existen
+                        meta_path = os.path.join(task_dir, "task_meta.json")
+                        meta = None
+                        if os.path.exists(meta_path):
+                            try:
+                                with open(meta_path, "r", encoding="utf-8") as f:
+                                    meta = json.load(f)
+                            except:
+                                pass
+                        valid_caches.append({"id": entry, "meta": meta})
                 else:
-                    valid_caches.append(entry)
+                    # Leer metadatos si existen
+                    meta_path = os.path.join(task_dir, "task_meta.json")
+                    meta = None
+                    if os.path.exists(meta_path):
+                        try:
+                            with open(meta_path, "r", encoding="utf-8") as f:
+                                meta = json.load(f)
+                        except:
+                            pass
+                    valid_caches.append({"id": entry, "meta": meta})
     return {"status": "ok", "caches": valid_caches}
 
 
