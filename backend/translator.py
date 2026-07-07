@@ -61,6 +61,47 @@ def fix_json_quotes(json_str: str) -> str:
     pattern = r'("text"\s*:\s*")(.*?)((?<!\\)"\s*,?\s*(?<!\\)"timestamp"|\s*\})'
     return re.sub(pattern, replace_quote, json_str, flags=re.DOTALL)
 
+def repair_json_robust(json_str: str) -> str:
+    """
+    Reparación programática agresiva: extrae cada chunk individualmente con regex
+    y reconstruye el JSON desde cero. Último recurso antes de llamar al LLM.
+    """
+    chunks = []
+    # Match each chunk object individually: {"index": N, "text": "...", "timestamp": [...]}
+    chunk_pattern = re.compile(
+        r'\{\s*"index"\s*:\s*(\d+)\s*,\s*"text"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,?\s*"timestamp"\s*:\s*(\[[^\]]*\])\s*\}',
+        re.DOTALL
+    )
+    for m in chunk_pattern.finditer(json_str):
+        idx = int(m.group(1))
+        text = m.group(2)
+        ts_raw = m.group(3)
+        try:
+            ts = json.loads(ts_raw)
+        except:
+            ts = [0.0, 0.0]
+        chunks.append({"index": idx, "text": text, "timestamp": ts})
+    
+    # Fallback: try looser pattern where text might have unescaped quotes
+    if not chunks:
+        loose_pattern = re.compile(
+            r'"index"\s*:\s*(\d+)\s*,\s*"text"\s*:\s*"(.+?)"\s*,\s*"timestamp"\s*:\s*(\[[^\]]*\])',
+            re.DOTALL
+        )
+        for m in loose_pattern.finditer(json_str):
+            idx = int(m.group(1))
+            text = m.group(2).replace('"', '\\"')
+            ts_raw = m.group(3)
+            try:
+                ts = json.loads(ts_raw)
+            except:
+                ts = [0.0, 0.0]
+            chunks.append({"index": idx, "text": text, "timestamp": ts})
+    
+    if chunks:
+        return json.dumps({"chunks": chunks}, ensure_ascii=False)
+    return json_str
+
 def translate_chunks(chunks: list, model: str = "gemma4:e2b-it-qat", save_dir: str = None, source_language: str = "English", target_language: str = "Spanish") -> list:
     url = "http://127.0.0.1:11434/api/chat"
     system_msg = (
@@ -68,6 +109,7 @@ def translate_chunks(chunks: list, model: str = "gemma4:e2b-it-qat", save_dir: s
         f"You will receive a JSON object with 'chunks' containing {source_language} text. "
         f"Translate the 'text' of each chunk to natural, fluent {target_language}. "
         "Keep the exact 'timestamp' and 'index' values. Do not omit, combine, or split chunks. "
+        "CRITICAL: All double quotes inside 'text' values MUST be escaped as \\\". "
         "Return the resulting JSON object with the translated 'chunks' and nothing else."
     )
     
@@ -133,6 +175,9 @@ def translate_chunks(chunks: list, model: str = "gemma4:e2b-it-qat", save_dir: s
 
         # Escape internal double quotes in text fields
         json_str = fix_json_quotes(json_str)
+        
+        # Attempt robust programmatic repair before first parse
+        json_str = repair_json_robust(json_str)
 
         translated_minimal_chunks = []
         max_attempts = 5
@@ -194,6 +239,7 @@ def translate_chunks(chunks: list, model: str = "gemma4:e2b-it-qat", save_dir: s
                         
                     # Also fix unescaped double quotes on LLM-corrected JSON string
                     json_str = fix_json_quotes(json_str)
+                    json_str = repair_json_robust(json_str)
                 except Exception as e_corr:
                     print(f"Error al enviar consulta de corrección en intento {current_attempt}: {e_corr}")
                     raise jde
@@ -202,7 +248,14 @@ def translate_chunks(chunks: list, model: str = "gemma4:e2b-it-qat", save_dir: s
                 
         if not translated_minimal_chunks and last_error:
             print(f"Fallo crítico: No se pudo auto-corregir el JSON de traducción tras {max_attempts} intentos.")
-            raise last_error
+            print(f"Usando texto original como fallback para {len(chunks)} chunks.")
+            translated_minimal_chunks = []
+            for idx, c in enumerate(chunks):
+                translated_minimal_chunks.append({
+                    "index": idx,
+                    "text": c.get("text", ""),
+                    "timestamp": c.get("timestamp", [0.0, 0.0])
+                })
             
         if save_dir and translated_minimal_chunks:
             try:
@@ -360,6 +413,8 @@ def enhance_translation_for_tts(chunks: list, model: str) -> list:
         if start_idx != -1 and end_idx != -1:
             content = content[start_idx:end_idx+1]
             
+        content = fix_json_quotes(content)
+        content = repair_json_robust(content)
         data = json.loads(content)
         sanitized_chunks = data.get("chunks", [])
         
@@ -468,6 +523,7 @@ def synchronize_translation_for_tts(chunks: list, model: str) -> list:
         if start_idx != -1 and end_idx != -1:
             content = content[start_idx:end_idx+1]
             
+        content = fix_json_quotes(content)
         synced_data = json.loads(content)
         
         # Robust extractor in case LLM wrapped the array in a dictionary (e.g. {"chunks": [...]})
