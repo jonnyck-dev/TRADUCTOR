@@ -1081,6 +1081,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function openStudioView() {
+        // Reset button states (they may be stuck from a previous render)
+        if (btnStudioFinalize) {
+            btnStudioFinalize.disabled = false;
+            btnStudioFinalize.innerHTML = '<i class="fa-solid fa-film"></i> Ensamblar Video Final';
+        }
+        if (btnStudioSplit) {
+            btnStudioSplit.disabled = false;
+            btnStudioSplit.innerHTML = '<i class="fa-solid fa-scissors"></i> Split Frase';
+        }
+
         homeView.classList.add('hidden');
         studioView.classList.remove('hidden');
         studioVideoWrapper.appendChild(videoPlayer);
