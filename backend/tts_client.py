@@ -3,6 +3,7 @@ import os
 import time
 import requests
 import queue
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from pydub import AudioSegment
 from whisper_client import wsl_to_windows_path
@@ -175,7 +176,7 @@ def align_words_to_chunks(chunk_texts, whisperx_words, total_duration):
 
 def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-Frank_man", task_id: str = None, tts_model: str = None, tts_cfg: float = 1.3, tts_steps: int = 10) -> list:
     """
-    Generates individual MP3 files for each translated chunk using TTS (VoxCPM or VibeVoice).
+    Generates individual MP3 files for each translated chunk using TTS (VoxCPM, VibeVoice, Edge TTS, or Windows Native).
     Returns a list of absolute paths to the generated MP3 files.
     """
     os.makedirs(tts_dir, exist_ok=True)
@@ -227,6 +228,29 @@ def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-
                 if os.path.exists(generated_wav):
                     try: os.remove(generated_wav)
                     except: pass
+        return mp3_paths
+
+    # 1.5. Edge TTS (online neural voices, no GPU needed)
+    if tts_model == "edge":
+        import edge_tts
+        for idx, chunk in enumerate(chunks):
+            if task_id and task_id in cancelled_tasks:
+                raise RuntimeError(f"Task {task_id} stopped by user.")
+            text = chunk.get("text", "").strip()
+            mp3_path = mp3_paths[idx]
+            if not text:
+                continue
+            if os.path.exists(mp3_path) and os.path.getsize(mp3_path) > 0:
+                continue
+
+            voice = speaker_name or "es-MX-DaliaNeural"
+            print(f"Using Edge TTS voice '{voice}' for phrase {idx}/{len(chunks)-1}")
+
+            async def _generate_edge():
+                communicate = edge_tts.Communicate(text, voice)
+                await communicate.save(mp3_path)
+
+            asyncio.run(_generate_edge())
         return mp3_paths
 
     # 2. Determine TTS Engine (VoxCPM or VibeVoice)

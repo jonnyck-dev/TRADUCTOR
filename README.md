@@ -1,6 +1,6 @@
 # JANUS Audio Editor / AI Video Dubber (v4.1)
 
-Aplicación web local para **traducir, doblar y editar** videos desde y hacia **9 idiomas**. Combina transcripción (WhisperX), traducción local (Ollama), síntesis de voz (VibeVoice / VoxCPM) y edición no-lineal en un estudio interactivo, optimizado para Windows/WSL con GPUs NVIDIA.
+Aplicación web local para **traducir, doblar y editar** videos desde y hacia **9 idiomas**. Combina transcripción (WhisperX), traducción local (Ollama), síntesis de voz (Edge TTS / VibeVoice / VoxCPM / Windows Native) y edición no-lineal en un estudio interactivo, optimizado para Windows/WSL con GPUs NVIDIA.
 
 ---
 
@@ -9,7 +9,7 @@ Aplicación web local para **traducir, doblar y editar** videos desde y hacia **
 ```
 YouTube / Local → Demucs (separación voz/fondo) → WhisperX (transcripción + timestamps por palabra)
 → Ollama (traducción one-shot) → Sanador IA (limpieza + puntuación) → Sincronización temporal
-→ TTS (VibeVoice / VoxCPM) → Mezcla con fondo → Fusión con video → QA (verificación WhisperX)
+→ TTS (Edge TTS / VibeVoice / VoxCPM / Windows Native) → Mezcla con fondo → Fusión con video → QA (verificación WhisperX)
 ```
 
 ### Idiomas Soportados

@@ -60,19 +60,36 @@
 
                         <label style="margin-top: 15px; display: block;">MODELO TTS</label>
                         <select id="select-studio-tts-model" class="studio-select" style="width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px; border-radius: 4px;">
-                            <option value="openbmb/VoxCPM2">VoxCPM2</option>
-                            <option value="VibeVoice-1.5B">VibeVoice 1.5B (Original)</option>
-                            <option value="VibeVoice-2B">VibeVoice 2B (Alta Calidad)</option>
+                            <optgroup label="Local (GPU, Clonación de Voz)">
+                                <option value="openbmb/VoxCPM2">VoxCPM2</option>
+                                <option value="VibeVoice-1.5B">VibeVoice 1.5B (Original)</option>
+                                <option value="VibeVoice-2B">VibeVoice 2B (Alta Calidad)</option>
+                            </optgroup>
+                            <optgroup label="Online (Sin GPU, Voces Neurales)">
+                                <option value="edge">🌐 Edge TTS (Microsoft Neural)</option>
+                            </optgroup>
                         </select>
                         
                         <label style="margin-top: 15px; display: block;">VOZ (SPEAKER)</label>
                         <select id="select-studio-speaker" class="studio-select" style="width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px; border-radius: 4px; margin-bottom: 10px;">
                             <option value="cloned_speaker">Voz Clonada (Extraída de esta frase)</option>
-                            <option value="en-Frank_man">VoxCPM2 - Frank (Hombre, Madura)</option>
-                            <option value="en-Carter_man">VoxCPM2 - Carter (Hombre, Joven)</option>
-                            <option value="en-Grace_woman">VoxCPM2 - Grace (Mujer, Joven)</option>
-                            <option value="en-Emma_woman">VoxCPM2 - Emma (Mujer, Profesional)</option>
-                            <option value="windows_native">Windows Native (Velocidad Inmediata)</option>
+                            <optgroup label="Edge TTS - Español (Online)">
+                                <option value="es-MX-DaliaNeural">🇲🇽 Dalia (Mujer, Mexicano)</option>
+                                <option value="es-MX-JorgeNeural">🇲🇽 Jorge (Hombre, Mexicano)</option>
+                                <option value="es-ES-ElviraNeural">🇪🇸 Elvira (Mujer, España)</option>
+                                <option value="es-ES-AlvaroNeural">🇪🇸 Álvaro (Hombre, España)</option>
+                                <option value="es-AR-ElenaNeural">🇦🇷 Elena (Mujer, Argentino)</option>
+                                <option value="es-AR-TomasNeural">🇦🇷 Tomás (Hombre, Argentino)</option>
+                            </optgroup>
+                            <optgroup label="Voces de Doblaje (VoxCPM / VibeVoice)">
+                                <option value="en-Frank_man">VoxCPM2 - Frank (Hombre, Madura)</option>
+                                <option value="en-Carter_man">VoxCPM2 - Carter (Hombre, Joven)</option>
+                                <option value="en-Grace_woman">VoxCPM2 - Grace (Mujer, Joven)</option>
+                                <option value="en-Emma_woman">VoxCPM2 - Emma (Mujer, Profesional)</option>
+                            </optgroup>
+                            <optgroup label="TTS Rápido (Windows)">
+                                <option value="windows_native">Windows Native (Velocidad Inmediata)</option>
+                            </optgroup>
                         </select>
                         <audio id="studio-audio-player" class="hidden"></audio>
                         

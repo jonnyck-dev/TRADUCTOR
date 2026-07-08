@@ -62,6 +62,11 @@ class ProcessRequest(BaseModel):
     sync_size: int = 1
     source_language: str = "English"
     target_language: str = "Spanish"
+    # tts_model:
+    #   - "openbmb/VoxCPM2" (default, local, GPU, voice cloning)
+    #   - "edge" (online Edge TTS, no GPU, 300+ neural voices)
+    #     → speaker = Edge voice name (e.g. "es-MX-DaliaNeural", "es-ES-ElviraNeural")
+    #   - Windows Native TTS: handled via speaker="windows_native"
 
 def is_cjk_language(lang: str) -> bool:
     return lang.lower() in ("japanese", "chinese", "korean", "ja", "zh", "ko")

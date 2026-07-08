@@ -174,6 +174,14 @@
                                 <optgroup label="Doblaje Personalizado">
                                     <option value="cloned_speaker" selected>🗣️ Voz Clonada (Original del Video)</option>
                                 </optgroup>
+                                <optgroup label="Edge TTS - Español (Online)">
+                                    <option value="es-MX-DaliaNeural">🇲🇽 Dalia (Mujer, Mexicano)</option>
+                                    <option value="es-MX-JorgeNeural">🇲🇽 Jorge (Hombre, Mexicano)</option>
+                                    <option value="es-ES-ElviraNeural">🇪🇸 Elvira (Mujer, España)</option>
+                                    <option value="es-ES-AlvaroNeural">🇪🇸 Álvaro (Hombre, España)</option>
+                                    <option value="es-AR-ElenaNeural">🇦🇷 Elena (Mujer, Argentino)</option>
+                                    <option value="es-AR-TomasNeural">🇦🇷 Tomás (Hombre, Argentino)</option>
+                                </optgroup>
                                 <optgroup label="Voces de Doblaje (VoxCPM / VibeVoice)">
                                     <option value="en-Frank_man">(Hombre) Frank</option>
                                     <option value="en-Carter_man">(Hombre) Carter</option>
@@ -233,9 +241,14 @@
                         <label for="select-tts-model">Modelo de Síntesis (TTS)</label>
                         <div class="select-wrapper">
                             <select id="select-tts-model">
-                                <option value="openbmb/VoxCPM2" selected>VoxCPM2 (Hifi - 2.0B)</option>
-                                <option value="VibeVoice-1.5B">VibeVoice 1.5B (Standard)</option>
-                                <option value="VibeVoice-Realtime-0.5B">VibeVoice 0.5B (Streaming)</option>
+                                <optgroup label="Local (GPU, Clonación de Voz)">
+                                    <option value="openbmb/VoxCPM2" selected>VoxCPM2 (Hifi - 2.0B)</option>
+                                    <option value="VibeVoice-1.5B">VibeVoice 1.5B (Standard)</option>
+                                    <option value="VibeVoice-Realtime-0.5B">VibeVoice 0.5B (Streaming)</option>
+                                </optgroup>
+                                <optgroup label="Online (Sin GPU, Voces Neurales)">
+                                    <option value="edge">🌐 Edge TTS (Microsoft Neural)</option>
+                                </optgroup>
                             </select>
                             <i class="fa-solid fa-chevron-down dropdown-icon"></i>
                         </div>
@@ -410,9 +423,14 @@
                         
                         <label style="margin-top: 15px; display: block;">MODELO TTS</label>
                         <select id="select-studio-tts-model" class="studio-select" style="width: 100%; background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.15); color: var(--color-text-main); padding: 8px; border-radius: 4px;">
-                            <option value="openbmb/VoxCPM2" selected>VoxCPM2 (Hifi - 2.0B)</option>
-                            <option value="VibeVoice-1.5B">VibeVoice 1.5B (Standard)</option>
-                            <option value="VibeVoice-Realtime-0.5B">VibeVoice 0.5B (Streaming)</option>
+                            <optgroup label="Local (GPU, Clonación de Voz)">
+                                <option value="openbmb/VoxCPM2" selected>VoxCPM2 (Hifi - 2.0B)</option>
+                                <option value="VibeVoice-1.5B">VibeVoice 1.5B (Standard)</option>
+                                <option value="VibeVoice-Realtime-0.5B">VibeVoice 0.5B (Streaming)</option>
+                            </optgroup>
+                            <optgroup label="Online (Sin GPU, Voces Neurales)">
+                                <option value="edge">🌐 Edge TTS (Microsoft Neural)</option>
+                            </optgroup>
                         </select>
 
                         <label style="margin-top: 15px; display: block;">MODELO WHISPERX</label>
@@ -428,6 +446,14 @@
                         <select id="select-studio-speaker" class="studio-select" style="width: 100%; background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.15); color: var(--color-text-main); padding: 8px; border-radius: 4px; margin-bottom: 10px;">
                             <optgroup label="Doblaje Personalizado">
                                 <option value="cloned_speaker" selected>🗣️ Voz Clonada (Extraída de esta frase)</option>
+                            </optgroup>
+                            <optgroup label="Edge TTS - Español (Online)">
+                                <option value="es-MX-DaliaNeural">🇲🇽 Dalia (Mujer, Mexicano)</option>
+                                <option value="es-MX-JorgeNeural">🇲🇽 Jorge (Hombre, Mexicano)</option>
+                                <option value="es-ES-ElviraNeural">🇪🇸 Elvira (Mujer, España)</option>
+                                <option value="es-ES-AlvaroNeural">🇪🇸 Álvaro (Hombre, España)</option>
+                                <option value="es-AR-ElenaNeural">🇦🇷 Elena (Mujer, Argentino)</option>
+                                <option value="es-AR-TomasNeural">🇦🇷 Tomás (Hombre, Argentino)</option>
                             </optgroup>
                             <optgroup label="Voces de Doblaje (VoxCPM / VibeVoice)">
                                 <option value="en-Frank_man">(Hombre) Frank</option>
