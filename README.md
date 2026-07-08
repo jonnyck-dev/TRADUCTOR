@@ -107,7 +107,7 @@ Servidor en **http://localhost:8000** | Studio en **http://localhost:8000/studio
 
 ## Interfaz Web
 
-- Diseño glassmorphism oscuro con acentos neón
+- Diseño claro con superficies translúcidas y acentos dorados
 - Selector de 9 idiomas (origen y destino)
 - Selector de modelo WhisperX
 - Selector de modelo Ollama con agrupación local/cloud
@@ -127,3 +127,12 @@ Servidor en **http://localhost:8000** | Studio en **http://localhost:8000/studio
 - **CJK Smart Merge**: Los chunks cortos en japonés, chino y coreano se fusionan por caracteres (no por palabras).
 - **Modelos de alineación**: Los modelos wav2vec2 para ja/zh/ko se guardan en `backend/whisperx_models/align/` (no dependen de HF cache).
 - **Parámetro jerárquico**: Los selectores del Studio heredan los valores del Home al abrirse (papá → hijo).
+
+---
+
+## Planes
+
+| Documento | Propósito |
+|-----------|-----------|
+| `frontend_landing_separation_plan.md` | Separar frontend del backend e integrarlo en janus-landing (Vercel) |
+| `editor/studio_dubber_separation_plan.md` | Separar estado del Studio y del Dubber en frontend y backend |

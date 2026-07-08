@@ -444,6 +444,9 @@ document.addEventListener('DOMContentLoaded', () => {
     loadOllamaModels();
 
     let openStudioOnLoad = false;
+    // Flag para distinguir un finalize del Studio (reensamblado) de un process inicial,
+    // de modo que al terminar el polling podamos restaurar el botón "Ensamblar Video Final".
+    let studioFinalizing = false;
     const btnProcessStudio = document.getElementById('btn-process-studio');
     if (btnProcessStudio) {
         btnProcessStudio.addEventListener('click', () => {
@@ -643,11 +646,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     localStorage.removeItem('janus_taskUrl');
                     notifyCompleted();
                     loadVideo(data.result);
+                    // Si venía de un reensamblado del Studio, restaurar el botón
+                    // y refrescar el timeline para que quede usable de inmediato.
+                    if (studioFinalizing) {
+                        studioFinalizing = false;
+                        resetStudioFinalizeButton();
+                        if (currentTaskId && typeof loadStudioData === 'function') {
+                            loadStudioData(currentTaskId);
+                        }
+                    }
                 } else if (data.status === 'failed') {
                     clearInterval(pollInterval);
                     localStorage.removeItem('janus_taskId');
                     localStorage.removeItem('janus_taskUrl');
                     currentTaskId = null;
+                    if (studioFinalizing) {
+                        studioFinalizing = false;
+                        resetStudioFinalizeButton();
+                    }
                     notifyFailed(data.error || 'Ocurrió un error desconocido.');
                     showError(data.error || 'Ocurrió un error desconocido.');
                 } else if (data.status === 'stopped') {
@@ -655,6 +671,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     localStorage.removeItem('janus_taskId');
                     localStorage.removeItem('janus_taskUrl');
                     currentTaskId = null;
+                    if (studioFinalizing) {
+                        studioFinalizing = false;
+                        resetStudioFinalizeButton();
+                    }
                     notifyFailed(data.error || 'Doblaje detenido por el usuario.');
                     showStopped(data.error || 'Doblaje detenido por el usuario.');
                 }
@@ -664,6 +684,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.removeItem('janus_taskId');
                 localStorage.removeItem('janus_taskUrl');
                 currentTaskId = null;
+                if (studioFinalizing) {
+                    studioFinalizing = false;
+                    resetStudioFinalizeButton();
+                }
                 showError(err.message);
             });
         }, 2000);
@@ -1074,6 +1098,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function openStudioView() {
         // Reset button states (they may be stuck from a previous render)
+        studioFinalizing = false;
         if (btnStudioFinalize) {
             btnStudioFinalize.disabled = false;
             btnStudioFinalize.innerHTML = '<i class="fa-solid fa-film"></i> Ensamblar Video Final';
@@ -1600,6 +1625,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    function resetStudioFinalizeButton() {
+        if (!btnStudioFinalize) return;
+        btnStudioFinalize.disabled = false;
+        btnStudioFinalize.innerHTML = '<i class="fa-solid fa-film"></i> Ensamblar Video Final';
+    }
+
     btnStudioFinalize.addEventListener('click', () => {
         if (!currentTaskId) return;
         if (confirm("Se ensamblará el video final con los cambios actuales. ¿Continuar?")) {
@@ -1617,12 +1648,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 subtitlesViewport.innerHTML = '<p class="empty-subs-msg">Ensamblando video final...</p>';
                 
                 updateStatus('queued', 0);
+                studioFinalizing = true;
                 startPolling(data.task_id);
             })
             .catch(err => {
                 alert('Error finalizando: ' + err);
-                btnStudioFinalize.disabled = false;
-                btnStudioFinalize.innerHTML = '<i class="fa-solid fa-film"></i> Ensamblar Video Final';
+                studioFinalizing = false;
+                resetStudioFinalizeButton();
             });
         }
     });

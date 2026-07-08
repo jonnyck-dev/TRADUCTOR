@@ -377,17 +377,41 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (data.status === 'completed') {
                     clearInterval(pollInterval);
-                    loadVideo(data.result);
+                    if (studioFinalizing) {
+                        // Venía de un reensamblado del Studio: restaurar el botón,
+                        // volver a la vista de edición y refrescar el timeline.
+                        studioFinalizing = false;
+                        resetStudioFinalizeButton();
+                        if (processingOverlay) processingOverlay.classList.add('hidden');
+                        if (videoPlayer) videoPlayer.classList.remove('hidden');
+                        openStudioView();
+                        if (typeof loadStudioData === 'function') loadStudioData();
+                        alert('¡Video reensamblado con éxito!');
+                    } else {
+                        loadVideo(data.result);
+                    }
                 } else if (data.status === 'failed') {
                     clearInterval(pollInterval);
+                    if (studioFinalizing) {
+                        studioFinalizing = false;
+                        resetStudioFinalizeButton();
+                    }
                     showError(data.error || 'Ocurrió un error desconocido.');
                 } else if (data.status === 'stopped') {
                     clearInterval(pollInterval);
+                    if (studioFinalizing) {
+                        studioFinalizing = false;
+                        resetStudioFinalizeButton();
+                    }
                     showStopped(data.error || 'Doblaje detenido por el usuario.');
                 }
             })
             .catch(err => {
                 clearInterval(pollInterval);
+                if (studioFinalizing) {
+                    studioFinalizing = false;
+                    resetStudioFinalizeButton();
+                }
                 showError(err.message);
             });
         }, 2000);
@@ -962,6 +986,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // Flag para distinguir un reensamblado del Studio de un process inicial.
+    let studioFinalizing = false;
+
+    function resetStudioFinalizeButton() {
+        if (!btnStudioFinalize) return;
+        btnStudioFinalize.disabled = false;
+        btnStudioFinalize.innerHTML = '<i class="fa-solid fa-film"></i> Ensamblar Video Final';
+    }
+
     if (btnStudioFinalize) btnStudioFinalize.addEventListener('click', () => {
         if (!currentTaskId) return;
         if (confirm("Se ensamblará el video final con los cambios actuales. ¿Continuar?")) {
@@ -971,14 +1004,19 @@ document.addEventListener('DOMContentLoaded', () => {
             fetch(`/api/studio/${currentTaskId}/finalize`, { method: 'POST' })
             .then(res => res.json())
             .then(data => {
-                // Redirect to main page which will show processing
-                localStorage.setItem('janus_taskId', currentTaskId);
-                window.location.href = '/';
+                // Mostrar overlay de procesamiento y hacer polling sin abandonar el editor.
+                if (startOverlay) startOverlay.classList.add('hidden');
+                if (processingOverlay) processingOverlay.classList.remove('hidden');
+                if (videoPlayer) videoPlayer.classList.add('hidden');
+                if (subtitlesViewport) subtitlesViewport.innerHTML = '<p class="empty-subs-msg">Ensamblando video final...</p>';
+                updateStatus('queued', 0);
+                studioFinalizing = true;
+                startPolling(data.task_id);
             })
             .catch(err => {
                 alert('Error finalizando: ' + err);
-                btnStudioFinalize.disabled = false;
-                btnStudioFinalize.innerHTML = '<i class="fa-solid fa-film"></i> Ensamblar Video Final';
+                studioFinalizing = false;
+                resetStudioFinalizeButton();
             });
         }
     });
