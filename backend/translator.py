@@ -349,7 +349,6 @@ def translate_chunks(chunks: list, model: str = "gemma4:e2b-it-qat", save_dir: s
             merged_chunks.append(new_chunk)
             
         print(f"¡Éxito en traducción One-Shot! Traducidos y alineados {len(chunks)} chunks.")
-        unload_model(model)
         return merged_chunks
     except OllamaCloudModelError as ve:
         raise ve
@@ -370,40 +369,103 @@ def unload_model(model: str):
 
 
 
+def safe_parse_ollama_json(content: str, model: str, max_retries: int = 3) -> dict:
+    """
+    Clean Ollama response, apply aggressive JSON repair, and auto-correct via LLM if needed.
+    Mirrors the battle-tested logic in translate_chunks.
+    """
+    content = content.strip()
+    if "<think>" in content:
+        content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+    if content.startswith("```"):
+        content = re.sub(r'^```(?:json)?\s*', '', content)
+    if content.endswith("```"):
+        content = re.sub(r'\s*```$', '', content)
+
+    start = content.find('{')
+    if start == -1:
+        start = content.find('[')
+    end = content.rfind('}')
+    if end == -1 or content.rfind(']') > end:
+        end = content.rfind(']')
+    if start != -1 and end != -1:
+        content = content[start:end+1]
+
+    for attempt in range(max_retries + 1):
+        try:
+            return json.loads(content, strict=False)
+        except json.JSONDecodeError as jde:
+            content = fix_json_quotes(content)
+            content = repair_json_robust(content)
+            try:
+                return json.loads(content, strict=False)
+            except json.JSONDecodeError:
+                pass
+
+            if attempt >= max_retries:
+                raise jde
+
+            print(f"  [safe-parse] JSON roto, pidiendo autocorrección al LLM (intento {attempt+1}/{max_retries})...")
+            correction_prompt = (
+                f"The following JSON text contains a syntax error: {jde}.\n"
+                f"Please fix ONLY the syntax errors (missing commas, unescaped quotes, unmatched brackets) "
+                f"and return the valid corrected JSON. Do NOT change values or structure. Return ONLY the raw corrected JSON.\n\n"
+                f"MALFORMED JSON:\n{content}"
+            )
+            corr_payload = {
+                "model": model,
+                "messages": [{"role": "user", "content": correction_prompt}],
+                "stream": False,
+                "format": "json",
+                "options": {"num_ctx": 128000, "num_predict": 32768, "temperature": 0.0}
+            }
+            try:
+                corr_res = call_ollama_api("http://127.0.0.1:11434/api/chat", corr_payload, timeout=180)
+                content = corr_res.get("message", {}).get("content", "").strip()
+                if "<think>" in content:
+                    content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+                if content.startswith("```"):
+                    content = re.sub(r'^```(?:json)?\s*', '', content)
+                if content.endswith("```"):
+                    content = re.sub(r'\s*```$', '', content)
+                s = content.find('{')
+                if s == -1: s = content.find('[')
+                e = content.rfind('}')
+                if e == -1 or content.rfind(']') > e: e = content.rfind(']')
+                if s != -1 and e != -1:
+                    content = content[s:e+1]
+            except Exception:
+                pass
+
+    raise ValueError(f"safe_parse_ollama_json: unable to parse JSON after {max_retries} retries")
+
+
 def enhance_translation_for_tts(chunks: list, model: str) -> list:
-    """
-    Second AI Pass: Cleans hallucinations, removes repetition loops, 
-    and adds strong grammatical punctuation for TTS emotion.
-    Enforces strict array length and index matching to prevent sync collapse.
-    """
-    import json
-    import re
     print("\n[Sanador IA] Iniciando segunda pasada de limpieza y emoción para el TTS...")
     
     minimal_chunks = [{"index": i, "text": c.get("text", "")} for i, c in enumerate(chunks)]
     json_input = json.dumps({"chunks": minimal_chunks}, ensure_ascii=False)
     
-    prompt = (
-        "You are a highly aggressive script cleaner for an AI Voice Actor. "
-        "Your PRIMARY directive is to completely eradicate AI stuttering, hallucinated words, and translation loops.\n\n"
-        "CRITICAL RULES:\n"
-        "1. ANNIHILATE REPETITIONS: If you see words or phrases repeating unnaturally ('ir a ir a', 'que que que', 'el el', 'bueno bueno bueno'), cut them out mercilessly. Leave only ONE instance of the phrase so it sounds like a normal human speaking.\n"
-        "2. Fix broken, disjointed, or nonsensical Spanish sentences caused by poor AI translation.\n"
-        "3. ADD intense grammatical punctuation (!, ?, ..., commas) to inject emotion into the TTS reading.\n"
-        "4. REMOVE any emojis, asterisks (*), or sound effect labels (like [risa]). Only keep spoken words.\n"
-        "5. CRITICAL: You MUST return EXACTLY the same number of chunks, keeping the exact same 'index' IDs.\n"
-        "6. Return ONLY a valid JSON object in the format: {\"chunks\": [{\"index\": 0, \"text\": \"...\"}, ...]}\n\n"
-        f"ORIGINAL SCRIPT:\n{json_input}"
+    system_msg = (
+        "You are a script cleaner for a Spanish Text-to-Speech engine. "
+        "Remove AI stuttering, repeated words, and translation artifacts from the Spanish text. "
+        "Add punctuation (!, ?, ...) for natural TTS emotion. Remove emojis and sound effect labels. "
+        "CRITICAL: Return EXACTLY the same number of chunks with the same index IDs. "
+        "Return ONLY a valid JSON object: {\"chunks\": [{\"index\": 0, \"text\": \"...\"}, ...]}"
     )
     
     payload = {
         "model": model,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": json_input}
+        ],
         "stream": False,
         "format": "json",
         "options": {
+            "num_ctx": 128000,
             "num_predict": 32768,
-            "temperature": 0.3
+            "temperature": 0.0
         }
     }
     
@@ -411,47 +473,31 @@ def enhance_translation_for_tts(chunks: list, model: str) -> list:
         url = "http://127.0.0.1:11434/api/chat"
         res = call_ollama_api(url, payload, timeout=300)
         content = res.get("message", {}).get("content", "").strip()
-        
-        if "<think>" in content:
-            content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
-            
-        start_idx = content.find('{')
-        end_idx = content.rfind('}')
-        if start_idx != -1 and end_idx != -1:
-            content = content[start_idx:end_idx+1]
-            
-        content = fix_json_quotes(content)
-        content = repair_json_robust(content)
-        data = json.loads(content)
+        data = safe_parse_ollama_json(content, model)
         sanitized_chunks = data.get("chunks", [])
         
-        # Map back safely by index
         sanitized_by_index = {c.get("index"): c.get("text", "") for c in sanitized_chunks}
         
         enhanced_chunks = []
         for i, orig_chunk in enumerate(chunks):
             new_chunk = dict(orig_chunk)
-            # If the index is missing or text is empty, fallback to original
             new_text = sanitized_by_index.get(i)
             if new_text is None or new_text.strip() == "":
                 new_text = orig_chunk.get("text", "")
             new_chunk["text"] = new_text
             enhanced_chunks.append(new_chunk)
             
-        print("[Sanador IA] Limpieza exitosa. Guion optimizado para VibeVoice.")
+        print("[Sanador IA] Limpieza exitosa. Guion optimizado para TTS.")
         return enhanced_chunks
         
     except Exception as e:
-        print(f"[Sanador IA] Falló la conexión o el formato ({e}). Usando traducción original.")
+        print(f"[Sanador IA] Falló ({e}). Usando traducción original.")
         return chunks
 
 def synchronize_translation_for_tts(chunks: list, model: str) -> list:
-    import json
-    import re
     import math
-    
     print("\n[Sanador IA] Paso 3: Sincronización Matemática de Tiempos...")
-    
+    import re
     chunks_to_sync = []
     
     for idx, chunk in enumerate(chunks):
@@ -494,26 +540,25 @@ def synchronize_translation_for_tts(chunks: list, model: str) -> list:
     
     json_input = json.dumps(chunks_to_sync, ensure_ascii=False)
     
-    prompt = (
-        "You are an expert audio dubbing synchronizer. The following Spanish phrases are too long to fit in their allotted video time. "
-        "Paraphrase and summarize each phrase so that its word count is less than or equal to the 'target_max_words' without losing the core meaning.\n\n"
-        "RULES:\n"
-        "1. DO NOT translate to English. Output in Spanish.\n"
-        "2. Keep the emotional tone and punctuation (!, ?, commas).\n"
-        "3. You MUST return EXACTLY the same number of items, keeping the exact same 'index' IDs.\n"
-        "4. Return ONLY a valid JSON array in the format: [{\"index\": 0, \"text\": \"...\"}, ...]\n"
-        "5. CRITICAL: NEVER use digits (0-9). If the input contains spelled-out numbers (e.g., 'ciento diez') or spelled-out phonetic acronyms (e.g., 'efe be e'), you MUST keep them written as words.\n\n"
-        f"OVERSIZED PHRASES:\n{json_input}"
+    system_msg = (
+        "You are an audio dubbing synchronizer. The following Spanish phrases are too long for their video time slots. "
+        "Paraphrase each phrase to fit within its target_max_words without losing core meaning. "
+        "Output in Spanish. Keep punctuation. CRITICAL: Return EXACTLY the same number of items with the same index IDs. "
+        "Return ONLY a valid JSON array: [{\"index\": 0, \"text\": \"...\"}, ...]"
     )
     
     payload = {
         "model": model,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": json_input}
+        ],
         "stream": False,
         "format": "json",
         "options": {
+            "num_ctx": 128000,
             "num_predict": 32768,
-            "temperature": 0.2
+            "temperature": 0.0
         }
     }
     
@@ -522,59 +567,32 @@ def synchronize_translation_for_tts(chunks: list, model: str) -> list:
         res = call_ollama_api(url, payload, timeout=300)
         content = res.get("message", {}).get("content", "").strip()
         
-        if "<think>" in content:
-            content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
-            
-        start_idx = content.find('[')
-        end_idx = content.rfind(']')
-        if start_idx != -1 and end_idx != -1:
-            content = content[start_idx:end_idx+1]
-            
-        content = fix_json_quotes(content)
-        synced_data = json.loads(content)
+        sync_data = safe_parse_ollama_json(content, model)
         
-        # Robust extractor in case LLM wrapped the array in a dictionary (e.g. {"chunks": [...]})
-        if isinstance(synced_data, dict):
-            if "chunks" in synced_data:
-                synced_data = synced_data["chunks"]
-            elif "data" in synced_data:
-                synced_data = synced_data["data"]
-            else:
-                for val in synced_data.values():
-                    if isinstance(val, list):
-                        synced_data = val
-                        break
-                        
-        if not isinstance(synced_data, list):
-            raise ValueError("El LLM no devolvió una lista JSON válida para la sincronización.")
+        synced_chunks = {}
+        for item in (sync_data if isinstance(sync_data, list) else sync_data.get("chunks", sync_data.get("data", []))):
+            idx = item.get("index")
+            txt = item.get("text")
+            if idx is not None and txt:
+                synced_chunks[idx] = txt
         
-        # Merge back
-        for synced_item in synced_data:
-            idx = synced_item.get("index")
-            new_text = synced_item.get("text")
-            if idx is not None and new_text and 0 <= idx < len(chunks):
-                chunks[idx]["text"] = new_text
-                print(f"  [Resumido] Bloque {idx} ajustado exitosamente al límite de tiempo.")
-                
+        for i, chunk in enumerate(chunks):
+            if i in synced_chunks:
+                chunks[i]["text"] = synced_chunks[i]
+                print(f"  [Sinc] Frase {i} ajustada al límite de tiempo.")
+
         return chunks
     except Exception as e:
         print(f"[Sanador IA] Falló la sincronización: {e}. Usando texto largo original.")
         return chunks
 
-def phonetic_normalization_for_tts(chunks: list, model: str = "qwen3.5:9b", save_dir: str = None, target_language: str = "spanish") -> list:
-    """
-    Escanea las frases buscando números o acrónimos. 
-    Si los encuentra, delega a una IA Especializada la tarea de escribir su pronunciación fonética.
-    Luego aplica un filtro Python incondicional para reemplazar 'y' por 'e'.
-    """
+def phonetic_normalization_for_tts(chunks: list, model: str, save_dir: str = None, target_language: str = "spanish") -> list:
     print("\n[Sanador IA] Paso Extra: Normalización Fonética (Anti-Acento Inglés)...")
-    
     import re
     chunks_to_phoneticize = []
     
     for idx, chunk in enumerate(chunks):
         text = chunk.get("text", "")
-        # Regex to find numbers (\d) or Acronyms (2 or more uppercase letters)
         if re.search(r'\d', text) or re.search(r'\b[A-Z]{2,}\b', text):
             chunks_to_phoneticize.append({
                 "index": idx,
@@ -585,30 +603,26 @@ def phonetic_normalization_for_tts(chunks: list, model: str = "qwen3.5:9b", save
         print(f"[Sanador IA] Se detectaron {len(chunks_to_phoneticize)} frases con números o acrónimos. Llamando a IA Fonética...")
         json_input = json.dumps(chunks_to_phoneticize, ensure_ascii=False)
         
-        prompt = (
-            "You are an expert phonetic transcriber for a Spanish Text-to-Speech (TTS) system that has an American English accent bias. "
-            "Your ONLY job is to normalize numbers and acronyms in the provided Spanish text so the TTS pronounces them correctly in Spanish.\n\n"
-            "RULES:\n"
-            "1. NUMBERS: Convert all numbers into spelled-out Spanish words based on context (e.g., '116' -> 'ciento dieciséis', '1990s' -> 'los años noventa').\n"
-            "2. ACRONYMS: Convert all uppercase acronyms that are pronounced letter-by-letter into phonetic syllables. Use 'e' instead of 'i' for the 'ee' sound because the TTS reads it like an American. (e.g., 'DLSS' -> 'de ele ese ese', 'FBI' -> 'efe be e', 'PC' -> 'pe se').\n"
-            "3. EXCEPTIONS: If an uppercase word is a known brand or name pronounced as a single word (like 'NVIDIA', 'NASA', 'SONY'), DO NOT spell it out.\n"
-            "4. DO NOT change the rest of the text, do not summarize, do not translate to English.\n"
-            "5. Return EXACTLY the same number of JSON objects with their original 'index'.\n\n"
-            "EXAMPLES:\n"
-            "Input: [{\"index\": 0, \"text\": \"El FBI encontró 2 armas en la PC.\"}]\n"
-            "Output: [{\"index\": 0, \"text\": \"El efe be e encontró dos armas en la pe se.\"}]\n\n"
-            "Input: [{\"index\": 1, \"text\": \"En 1994, NVIDIA lanzó el DLSS versión 2.5.\"}]\n"
-            "Output: [{\"index\": 1, \"text\": \"En mil novecientos noventa y cuatro, NVIDIA lanzó el de ele ese ese versión dos punto cinco.\"}]\n\n"
-            "Now process the following array:\n"
-            f"{json_input}"
+        system_msg = (
+            "You are a phonetic transcriber for a Spanish Text-to-Speech engine. "
+            "Convert numbers to spelled-out Spanish words and acronyms to phonetic Spanish syllables. "
+            "CRITICAL: Return EXACTLY the same number of items with the same index IDs. "
+            "Return ONLY a valid JSON array: [{\"index\": 0, \"text\": \"...\"}, ...]"
         )
         
         payload = {
             "model": model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": [
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": json_input}
+            ],
             "stream": False,
             "format": "json",
-            "options": {"num_predict": 32768, "temperature": 0.1}
+            "options": {
+                "num_ctx": 128000,
+                "num_predict": 32768,
+                "temperature": 0.0
+            }
         }
         
         try:
@@ -616,36 +630,26 @@ def phonetic_normalization_for_tts(chunks: list, model: str = "qwen3.5:9b", save
             res = call_ollama_api(url, payload, timeout=300)
             content = res.get("message", {}).get("content", "").strip()
             
-            if "<think>" in content:
-                content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
-                
-            start_idx = content.find('[')
-            end_idx = content.rfind(']')
-            if start_idx != -1 and end_idx != -1:
-                content = content[start_idx:end_idx+1]
-                
-            phonetic_data = json.loads(content)
+            phone_data = safe_parse_ollama_json(content, model)
             
-            if isinstance(phonetic_data, dict):
-                for key in ["chunks", "data"]:
-                    if key in phonetic_data and isinstance(phonetic_data[key], list):
-                        phonetic_data = phonetic_data[key]
-                        break
-                else:
-                    for val in phonetic_data.values():
-                        if isinstance(val, list):
-                            phonetic_data = val
-                            break
-                            
-            if isinstance(phonetic_data, list):
-                for p_item in phonetic_data:
+            if isinstance(phone_data, list):
+                for p_item in phone_data:
                     idx = p_item.get("index")
                     new_text = p_item.get("text")
                     if idx is not None and new_text and 0 <= idx < len(chunks):
                         chunks[idx]["text"] = new_text
                         print(f"  [Fonética] Bloque {idx} normalizado: {new_text}")
             else:
-                print("[Sanador IA] Error: La IA Fonética no devolvió una lista JSON válida.")
+                phone_items = phone_data.get("chunks", phone_data.get("data", []))
+                if isinstance(phone_items, list):
+                    for p_item in phone_items:
+                        idx = p_item.get("index")
+                        new_text = p_item.get("text")
+                        if idx is not None and new_text and 0 <= idx < len(chunks):
+                            chunks[idx]["text"] = new_text
+                            print(f"  [Fonética] Bloque {idx} normalizado: {new_text}")
+                else:
+                    print("[Sanador IA] Error: La IA Fonética no devolvió una lista JSON válida.")
         except Exception as e:
             print(f"[Sanador IA] Falló la normalización fonética: {e}. Se usará texto original.")
     else:

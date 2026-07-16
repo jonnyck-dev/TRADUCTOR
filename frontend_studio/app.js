@@ -16,9 +16,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const inputTtsCfg = document.getElementById('input-tts-cfg') || document.createElement('input');
     inputTtsCfg.value = "2.0";
     const inputTtsSteps = document.getElementById('input-tts-steps') || document.createElement('input');
-    inputTtsSteps.value = "10";
+
     const valTtsCfg = document.getElementById('val-tts-cfg') || document.createElement('span');
     const valTtsSteps = document.getElementById('val-tts-steps') || document.createElement('span');
+
+    const chkUseEnhance = document.getElementById('chk-use-enhance');
+    const chkUsePhonetic = document.getElementById('chk-use-phonetic');
+    const chkUseSync = document.getElementById('chk-use-sync');
     const inputBatchSize = document.getElementById('input-batch-size') || document.createElement('input');
     const valBatchSize = document.getElementById('val-batch-size') || document.createElement('span');
     const inputSyncSize = document.getElementById('input-sync-size') || document.createElement('input');
@@ -59,7 +63,72 @@ document.addEventListener('DOMContentLoaded', () => {
             syncSizeGroup.style.flexDirection = 'column';
         }
     });
-    
+
+    // --- TTS Model/Speaker Binding ---
+    function getModelForSpeaker(speakerValue) {
+        if (speakerValue.startsWith('es-')) return 'edge';
+        if (speakerValue.startsWith('en-')) return 'VibeVoice-1.5B';
+        if (speakerValue === 'cloned_speaker') return 'openbmb/VoxCPM2';
+        if (speakerValue === 'windows_native') return null;
+        if (speakerValue.includes('young adult') || speakerValue.includes('middle-aged') ||
+            speakerValue.includes('low pitch') || speakerValue.includes('high pitch')) {
+            return 'k2-fsa/OmniVoice';
+        }
+        return null;
+    }
+
+    function isSpeakerCompatible(speaker, model) {
+        if (!speaker || !model) return true;
+        if (speaker === 'windows_native') return true;
+        if (speaker === 'cloned_speaker') return true;
+        if (speaker.startsWith('es-')) return model === 'edge';
+        if (speaker.startsWith('en-')) return model.startsWith('VibeVoice') || model === 'openbmb/VoxCPM2';
+        if (speaker.includes('young adult') || speaker.includes('middle-aged') ||
+            speaker.includes('low pitch') || speaker.includes('high pitch')) {
+            return model === 'k2-fsa/OmniVoice';
+        }
+        return true;
+    }
+
+    function updateSpeakerWarning(speakerSelect, ttsModelSelect, warningEl) {
+        if (!warningEl) return;
+        const compatible = isSpeakerCompatible(speakerSelect.value, ttsModelSelect.value);
+        warningEl.classList.toggle('hidden', compatible);
+    }
+
+    function updateCfgStepsLabels() {
+        if (valTtsCfg && inputTtsCfg) valTtsCfg.textContent = inputTtsCfg.value;
+        if (valTtsSteps && inputTtsSteps) valTtsSteps.textContent = inputTtsSteps.value;
+    }
+    if (inputTtsCfg) inputTtsCfg.addEventListener('input', updateCfgStepsLabels);
+    if (inputTtsSteps) inputTtsSteps.addEventListener('input', updateCfgStepsLabels);
+
+    selectSpeaker.addEventListener('change', () => {
+        const model = getModelForSpeaker(selectSpeaker.value);
+        if (model) {
+            selectTtsModel.value = model;
+        }
+        updateSpeakerWarning(selectSpeaker, selectTtsModel, document.getElementById('speaker-compat-warning'));
+    });
+
+    selectTtsModel.addEventListener('change', () => {
+        updateSpeakerWarning(selectSpeaker, selectTtsModel, document.getElementById('speaker-compat-warning'));
+        if (selectTtsModel.value === 'k2-fsa/OmniVoice') {
+            if (inputTtsCfg) inputTtsCfg.value = 2.0;
+            if (inputTtsSteps) inputTtsSteps.value = 16;
+            if (chkUsePhonetic) { chkUsePhonetic.checked = false; chkUsePhonetic.parentElement.style.opacity = '0.5'; }
+        } else if (selectTtsModel.value === 'edge') {
+            if (chkUsePhonetic) { chkUsePhonetic.checked = false; chkUsePhonetic.parentElement.style.opacity = '0.5'; }
+        } else if (selectTtsModel.value === 'openbmb/VoxCPM2') {
+            if (inputTtsCfg) inputTtsCfg.value = 2.0;
+            if (inputTtsSteps) inputTtsSteps.value = 10;
+            if (chkUsePhonetic && !chkUsePhonetic.checked) { chkUsePhonetic.checked = true; chkUsePhonetic.parentElement.style.opacity = '1'; }
+        } else {
+            if (chkUsePhonetic) { chkUsePhonetic.checked = true; chkUsePhonetic.parentElement.style.opacity = '1'; }
+        }
+        updateCfgStepsLabels();
+    });
+
     const chkUseCache = document.getElementById('chk-use-cache');
     const cacheSelectWrapper = document.getElementById('cache-select-wrapper');
     const selectCache = document.getElementById('select-cache');
@@ -1001,7 +1070,16 @@ document.addEventListener('DOMContentLoaded', () => {
             btnStudioFinalize.disabled = true;
             btnStudioFinalize.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Ensamblando...';
             
-            fetch(`/api/studio/${currentTaskId}/finalize`, { method: 'POST' })
+            const finalizePayload = {
+                use_enhance: chkUseEnhance ? chkUseEnhance.checked : true,
+                use_phonetic: chkUsePhonetic ? chkUsePhonetic.checked : true,
+                use_sync: chkUseSync ? chkUseSync.checked : true
+            };
+            fetch(`/api/studio/${currentTaskId}/finalize`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(finalizePayload)
+            })
             .then(res => res.json())
             .then(data => {
                 // Mostrar overlay de procesamiento y hacer polling sin abandonar el editor.

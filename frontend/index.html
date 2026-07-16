@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -189,6 +189,14 @@
                                     <option value="en-Grace_woman">(Mujer) Grace</option>
                                     <option value="en-Emma_woman">(Mujer) Emma</option>
                                 </optgroup>
+                                <optgroup label="OmniVoice - Diseño de Voz (600+ Idiomas)">
+                                    <option value="female, young adult">👩 Joven (Mujer)</option>
+                                    <option value="male, young adult">👨 Joven (Hombre)</option>
+                                    <option value="female, middle-aged">👩 Adulta (Mujer)</option>
+                                    <option value="male, low pitch">👨 Voz Grave (Hombre)</option>
+                                    <option value="female, high pitch">👩 Voz Aguda (Mujer)</option>
+                                    <option value="male, middle-aged, low pitch">👨 Voz Profunda (Hombre)</option>
+                                </optgroup>
                             </select>
                             <i class="fa-solid fa-chevron-down dropdown-icon"></i>
                         </div>
@@ -245,6 +253,7 @@
                                     <option value="openbmb/VoxCPM2" selected>VoxCPM2 (Hifi - 2.0B)</option>
                                     <option value="VibeVoice-1.5B">VibeVoice 1.5B (Standard)</option>
                                     <option value="VibeVoice-Realtime-0.5B">VibeVoice 0.5B (Streaming)</option>
+                                    <option value="k2-fsa/OmniVoice">🌍 OmniVoice (600+ Idiomas - 0.6B)</option>
                                 </optgroup>
                                 <optgroup label="Online (Sin GPU, Voces Neurales)">
                                     <option value="edge">🌐 Edge TTS (Microsoft Neural)</option>
@@ -295,6 +304,13 @@
                             <span id="val-tts-steps" class="badge">10</span>
                         </label>
                         <input type="range" id="input-tts-steps" min="5" max="50" step="1" value="10" style="width: 100%; margin-top: 8px;">
+                    </div>
+
+                    <div class="control-group" style="margin-top: 12px;">
+                        <label style="font-weight: 600; font-size: 0.85rem; margin-bottom: 8px; display: block;">IAs de Post-Procesamiento</label>
+                        <label class="checkbox-label"><input type="checkbox" id="chk-use-enhance" checked> Sanador IA (limpieza de repeticiones)</label>
+                        <label class="checkbox-label"><input type="checkbox" id="chk-use-phonetic" checked> Fonética IA (números y acrónimos → español)</label>
+                        <label class="checkbox-label"><input type="checkbox" id="chk-use-sync" checked> Reductor IA (acortar frases largas)</label>
                     </div>
                 </div>
 
@@ -427,6 +443,7 @@
                                 <option value="openbmb/VoxCPM2" selected>VoxCPM2 (Hifi - 2.0B)</option>
                                 <option value="VibeVoice-1.5B">VibeVoice 1.5B (Standard)</option>
                                 <option value="VibeVoice-Realtime-0.5B">VibeVoice 0.5B (Streaming)</option>
+                                <option value="k2-fsa/OmniVoice">🌍 OmniVoice (600+ Idiomas - 0.6B)</option>
                             </optgroup>
                             <optgroup label="Online (Sin GPU, Voces Neurales)">
                                 <option value="edge">🌐 Edge TTS (Microsoft Neural)</option>
@@ -461,6 +478,14 @@
                                 <option value="en-Davis_man">(Hombre) Davis</option>
                                 <option value="en-Grace_woman">(Mujer) Grace</option>
                                 <option value="en-Emma_woman">(Mujer) Emma</option>
+                            </optgroup>
+                            <optgroup label="OmniVoice - Diseño de Voz (600+ Idiomas)">
+                                <option value="female, young adult">👩 Joven (Mujer)</option>
+                                <option value="male, young adult">👨 Joven (Hombre)</option>
+                                <option value="female, middle-aged">👩 Adulta (Mujer)</option>
+                                <option value="male, low pitch">👨 Voz Grave (Hombre)</option>
+                                <option value="female, high pitch">👩 Voz Aguda (Mujer)</option>
+                                <option value="male, middle-aged, low pitch">👨 Voz Profunda (Hombre)</option>
                             </optgroup>
                             <optgroup label="TTS Rápido (Windows)">
                                 <option value="windows_native">🤖 Voz Robótica (Nativa Windows)</option>
@@ -551,5 +576,9 @@
     </div>
 
     <script src="app.js"></script>
+    <link rel="stylesheet" href="chat-style.css">
+    <div id="janus-chat-widget"></div>
+    <script src="chat-app.js"></script>
 </body>
 </html>
+

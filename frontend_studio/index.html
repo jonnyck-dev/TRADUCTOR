@@ -64,6 +64,7 @@
                                 <option value="openbmb/VoxCPM2">VoxCPM2</option>
                                 <option value="VibeVoice-1.5B">VibeVoice 1.5B (Original)</option>
                                 <option value="VibeVoice-2B">VibeVoice 2B (Alta Calidad)</option>
+                                <option value="k2-fsa/OmniVoice">🌍 OmniVoice (600+ Idiomas - 0.6B)</option>
                             </optgroup>
                             <optgroup label="Online (Sin GPU, Voces Neurales)">
                                 <option value="edge">🌐 Edge TTS (Microsoft Neural)</option>
@@ -87,12 +88,27 @@
                                 <option value="en-Grace_woman">VoxCPM2 - Grace (Mujer, Joven)</option>
                                 <option value="en-Emma_woman">VoxCPM2 - Emma (Mujer, Profesional)</option>
                             </optgroup>
+                            <optgroup label="OmniVoice - Diseño de Voz (600+ Idiomas)">
+                                <option value="female, young adult">👩 Joven (Mujer)</option>
+                                <option value="male, young adult">👨 Joven (Hombre)</option>
+                                <option value="female, middle-aged">👩 Adulta (Mujer)</option>
+                                <option value="male, low pitch">👨 Voz Grave (Hombre)</option>
+                                <option value="female, high pitch">👩 Voz Aguda (Mujer)</option>
+                                <option value="male, middle-aged, low pitch">👨 Voz Profunda (Hombre)</option>
+                            </optgroup>
                             <optgroup label="TTS Rápido (Windows)">
                                 <option value="windows_native">Windows Native (Velocidad Inmediata)</option>
                             </optgroup>
                         </select>
                         <audio id="studio-audio-player" class="hidden"></audio>
                         
+                        <div class="control-group" style="margin-top: 12px;">
+                            <label style="font-weight: 600; font-size: 0.85rem; margin-bottom: 8px; display: block;">IAs de Post-Procesamiento</label>
+                            <label class="checkbox-label"><input type="checkbox" id="chk-use-enhance" checked> Sanador IA</label>
+                            <label class="checkbox-label"><input type="checkbox" id="chk-use-phonetic" checked> Fonética IA</label>
+                            <label class="checkbox-label"><input type="checkbox" id="chk-use-sync" checked> Reductor IA</label>
+                        </div>
+
                         <button id="btn-studio-regenerate" class="glow-button regenerate-btn" style="width: 100%; margin-top: 15px; background: linear-gradient(135deg, rgba(157, 78, 221, 0.6) 0%, rgba(0, 242, 254, 0.4) 100%);">
                             <i class="fa-solid fa-rotate"></i> Regenerate Audio (5s)
                         </button>

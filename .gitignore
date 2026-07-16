@@ -9,8 +9,10 @@ backend/vibevoice/env_vibevoice/
 backend/VoxCPM/env_voxcpm/
 backend/demucs/env/
 
-# Cloned subproject repos (auto-setup clones these)
+# Cloned subproject repos (auto-setup clones these, keep our custom servers)
 backend/VoxCPM/
+backend/OmniVoice/*
+!backend/OmniVoice/omnivoice_server.py
 
 # Bundled binaries (downloaded by setup script)
 backend/bin/ffmpeg
@@ -47,7 +49,7 @@ implementation_plan.md
 debugagent.md
 deployment_plan.md
 benchmark_report.md
-editor/
+documentacion/
 
 # Debug test scripts
 debugs/

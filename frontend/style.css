@@ -672,6 +672,22 @@ video {
 .dev-checkbox-label input[type="checkbox"] {
     accent-color: var(--accent-gold);
     width: 16px;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    user-select: none;
+    padding: 3px 0;
+}
+
+.checkbox-label input[type="checkbox"] {
+    accent-color: var(--accent-gold);
+    width: 14px;
     height: 16px;
     cursor: pointer;
 }

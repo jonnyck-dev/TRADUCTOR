@@ -25,13 +25,22 @@ def start_tts_server(model_name_or_path: str = None, port: int = 8001, engine: s
     
     if engine == "vibevoice":
         code_dir = os.path.join(base_dir, "backend", "vibevoice")
+        venv_dir = os.path.join(base_dir, "backend", "vibevoice", "env_vibevoice")
         server_script = "vibevoice_server.py"
-        venv_name = "env_vibevoice"
         model_arg = f" --model_path checkpoints\\{model_name_or_path}" if model_name_or_path else ""
+    elif engine == "omnivoice":
+        code_dir = os.path.join(base_dir, "backend", "OmniVoice")
+        venv_dir = os.path.join(base_dir, "backend", "VoxCPM", "env_voxcpm")
+        server_script = "omnivoice_server.py"
+        local_model = os.path.join(base_dir, "backend", "OmniVoice", "pretrained_models", "OmniVoice")
+        if os.path.exists(local_model):
+            model_arg = f" --model_path {wsl_to_windows_path(local_model)}"
+        else:
+            model_arg = " --model_path k2-fsa/OmniVoice"
     else:  # voxcpm
         code_dir = os.path.join(base_dir, "backend", "VoxCPM")
+        venv_dir = os.path.join(base_dir, "backend", "VoxCPM", "env_voxcpm")
         server_script = "voxcpm_server.py"
-        venv_name = "env_voxcpm"
         if model_name_or_path:
             model_arg = f" --model_path {model_name_or_path}"
         else:
@@ -39,7 +48,7 @@ def start_tts_server(model_name_or_path: str = None, port: int = 8001, engine: s
             
     win_code_dir = wsl_to_windows_path(code_dir)
     port_arg = f" --port {port}"
-    python_exe = os.path.join(code_dir, venv_name, "Scripts", "python.exe")
+    python_exe = os.path.join(venv_dir, "Scripts", "python.exe")
     
     if os.name == 'nt':
         cmd = f'"{python_exe}" {server_script}{model_arg}{port_arg}'
@@ -174,9 +183,9 @@ def align_words_to_chunks(chunk_texts, whisperx_words, total_duration):
         
     return results
 
-def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-Frank_man", task_id: str = None, tts_model: str = None, tts_cfg: float = 1.3, tts_steps: int = 10) -> list:
+def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-Frank_man", task_id: str = None, tts_model: str = None, tts_cfg: float = 1.3, tts_steps: int = 10, target_language: str = "Spanish", ref_text: str = None) -> list:
     """
-    Generates individual MP3 files for each translated chunk using TTS (VoxCPM, VibeVoice, Edge TTS, or Windows Native).
+    Generates individual MP3 files for each translated chunk using TTS (VoxCPM, VibeVoice, OmniVoice, Edge TTS, or Windows Native).
     Returns a list of absolute paths to the generated MP3 files.
     """
     os.makedirs(tts_dir, exist_ok=True)
@@ -253,11 +262,14 @@ def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-
             asyncio.run(_generate_edge())
         return mp3_paths
 
-    # 2. Determine TTS Engine (VoxCPM or VibeVoice)
+    # 2. Determine TTS Engine (VoxCPM, VibeVoice, or OmniVoice)
     model_name = tts_model or "openbmb/VoxCPM2"
-    engine = "vibevoice"
-    if "vox" in model_name.lower() or "cpm" in model_name.lower() or "openbmb" in model_name.lower():
+    if "omnivoice" in model_name.lower():
+        engine = "omnivoice"
+    elif "vox" in model_name.lower() or "cpm" in model_name.lower() or "openbmb" in model_name.lower():
         engine = "voxcpm"
+    else:
+        engine = "vibevoice"
         
     # Filter chunks that actually need generation
     chunks_to_generate = []
@@ -272,11 +284,14 @@ def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-
     use_server = False
     
     # Determine parallel workers:
-    # VoxCPM always uses 1 instance for base testing (single-threaded).
+    # OmniVoice (0.6B params, RTF 0.025) uses 3 workers for parallel generation.
+    # VoxCPM always uses 1 instance (single-threaded).
     # VibeVoice 0.5B uses 3 workers, VibeVoice 1.5B uses 1 worker.
-    if engine == "voxcpm":
-        num_workers = 3 if "0.5b" in model_name.lower() else 1
-    else:
+    if engine == "omnivoice":
+        num_workers = 3
+    elif engine == "voxcpm":
+        num_workers = 1
+    else:  # vibevoice
         num_workers = 3 if "0.5b" in model_name.lower() else 1
         
     print(f"Using {num_workers} parallel {engine.upper()} server instances for model: {model_name}")
@@ -342,6 +357,25 @@ def generate_individual_tts(chunks: list, tts_dir: str, speaker_name: str = "en-
                                 "inference_timesteps": tts_steps,
                                 "reference_wav_path": win_cloned_wav_path if speaker_name == "cloned_speaker" else None,
                                 "normalize": False
+                            }
+                        elif engine == "omnivoice":
+                            ref_wav = None
+                            if speaker_name == "cloned_speaker":
+                                bridge_wav = os.path.join(tts_dir, "ref_es_bridge.wav")
+                                if os.path.exists(bridge_wav):
+                                    ref_wav = wsl_to_windows_path(bridge_wav)
+                                    print(f"[OmniVoice] Using bridge ref: ref_es_bridge.wav")
+                                else:
+                                    ref_wav = win_cloned_wav_path
+                            payload = {
+                                "text": text,
+                                "speaker": speaker_name,
+                                "output_path": win_temp_wav,
+                                "reference_wav_path": ref_wav,
+                                "ref_text": ref_text,
+                                "target_language": target_language,
+                                "num_step": tts_steps,
+                                "guidance_scale": tts_cfg,
                             }
                         else:  # vibevoice
                             payload = {

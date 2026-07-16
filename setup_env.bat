@@ -75,18 +75,30 @@ if not exist "backend\demucs\.git" (
 echo.
 echo [3/5] Creando entornos virtuales de subproyectos...
 
-:: VoxCPM venv
+:: VoxCPM venv (shared with OmniVoice)
 if not exist "backend\VoxCPM\env_voxcpm\Scripts\python.exe" (
     echo   - Creando venv de VoxCPM...
     cd backend\VoxCPM
     python -m venv env_voxcpm
     call env_voxcpm\Scripts\activate.bat
     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 --quiet
-    pip install fastapi uvicorn requests pydantic soundfile huggingface_hub --quiet
+    pip install fastapi uvicorn requests pydantic soundfile huggingface_hub accelerate --quiet
     cd ..\..
     echo [OK] VoxCPM configurado.
 ) else (
     echo   - VoxCPM venv ya existe. Saltando.
+)
+
+:: OmniVoice (install in shared VoxCPM env)
+if exist "backend\OmniVoice\pyproject.toml" (
+    echo   - Instalando OmniVoice en env_voxcpm...
+    cd backend\VoxCPM
+    call env_voxcpm\Scripts\activate.bat
+    pip install -e ..\OmniVoice --quiet
+    cd ..\..
+    echo [OK] OmniVoice configurado.
+) else (
+    echo   - [SKIP] OmniVoice no encontrado en backend\OmniVoice
 )
 
 :: VibeVoice venv

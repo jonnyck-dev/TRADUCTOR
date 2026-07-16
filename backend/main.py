@@ -62,6 +62,9 @@ class ProcessRequest(BaseModel):
     sync_size: int = 1
     source_language: str = "English"
     target_language: str = "Spanish"
+    use_enhance: bool = True
+    use_phonetic: bool = True
+    use_sync: bool = True
     # tts_model:
     #   - "openbmb/VoxCPM2" (default, local, GPU, voice cloning)
     #   - "edge" (online Edge TTS, no GPU, 300+ neural voices)
@@ -404,16 +407,14 @@ def prepare_cloned_voice(audio_path: str, whisper_json_path: str):
         # Lógica especial y cimientos para "Editor por Slices"
         is_local_path = os.path.join(os.path.dirname(audio_path), "is_local.txt")
         if os.path.exists(is_local_path):
-            if len(audio) <= 15000:
+            if len(audio) <= 10000:
                 sample_duration = len(audio) - start_ms
-                print(f"[Voice Cloning] Modo Slice detectado (<15s). Usando muestra total de {sample_duration/1000:.2f} segundos.")
-            elif len(audio) <= 35000:
-                sample_duration = 15000
-                print("[Voice Cloning] Video local corto detectado. Extrayendo muestra optimizada de 15 segundos.")
+                print(f"[Voice Cloning] Modo Slice detectado (<10s). Usando muestra total de {sample_duration/1000:.2f} segundos.")
             else:
-                sample_duration = 60000
+                sample_duration = 10000
+                print("[Voice Cloning] Recortando muestra a 10 segundos para clonación óptima.")
         else:
-            sample_duration = 60000
+            sample_duration = 10000
             
         end_ms = start_ms + sample_duration
         end_ms = min(end_ms, len(audio))
@@ -436,7 +437,7 @@ def prepare_cloned_voice(audio_path: str, whisper_json_path: str):
         print(f"Error al preparar la voz clonada: {e}")
         traceback.print_exc()
 
-def process_translation_task(task_id: str, url: str, model: str, speaker: str, tts_model: str = None, whisper_model: str = "large-v3-turbo", tts_cfg: float = 2.0, tts_steps: int = 10, tts_mode: str = "sentence", batch_size: int = 1, sync_size: int = 1, source_language: str = "English", target_language: str = "Spanish"):
+def process_translation_task(task_id: str, url: str, model: str, speaker: str, tts_model: str = None, whisper_model: str = "large-v3-turbo", tts_cfg: float = 2.0, tts_steps: int = 10, tts_mode: str = "sentence", batch_size: int = 1, sync_size: int = 1, source_language: str = "English", target_language: str = "Spanish", use_enhance: bool = True, use_phonetic: bool = True, use_sync: bool = True):
     import time
     start_task_time = time.time()
     step_times = {}
@@ -469,7 +470,10 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, t
             "sync_size": sync_size,
             "tts_cfg": tts_cfg,
             "tts_steps": tts_steps,
-            "tts_mode": tts_mode
+            "tts_mode": tts_mode,
+            "use_enhance": use_enhance,
+            "use_phonetic": use_phonetic,
+            "use_sync": use_sync
         }
         
         # Detectar conflictos de parámetros y invalidar caché si es necesario
@@ -600,19 +604,31 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, t
                 with open(translated_json_path, "w", encoding="utf-8") as f:
                     json.dump(raw_data, f, ensure_ascii=False, indent=2)
             
-            # 3b-3d. Post-processing pipeline (only for Spanish target)
+            # 3b-3d. Post-processing pipeline (only for Spanish target, conditional on flags)
             from translator import enhance_translation_for_tts, phonetic_normalization_for_tts, synchronize_translation_for_tts
             
             if target_language.lower() == "spanish":
-                enhanced_chunks = enhance_translation_for_tts(raw_translated_chunks, model=model)
-                with open(enhanced_json_path, "w", encoding="utf-8") as f:
-                    json.dump({"chunks": enhanced_chunks}, f, ensure_ascii=False, indent=2)
+                if use_enhance:
+                    enhanced_chunks = enhance_translation_for_tts(raw_translated_chunks, model=model)
+                    with open(enhanced_json_path, "w", encoding="utf-8") as f:
+                        json.dump({"chunks": enhanced_chunks}, f, ensure_ascii=False, indent=2)
+                else:
+                    enhanced_chunks = raw_translated_chunks
+                    print("[Pipeline] Enhance skipped (user disabled).")
                 
-                phonetic_chunks = phonetic_normalization_for_tts(enhanced_chunks, model=model)
-                with open(phonetic_json_path, "w", encoding="utf-8") as f:
-                    json.dump({"chunks": phonetic_chunks}, f, ensure_ascii=False, indent=2)
+                if use_phonetic:
+                    phonetic_chunks = phonetic_normalization_for_tts(enhanced_chunks, model=model)
+                    with open(phonetic_json_path, "w", encoding="utf-8") as f:
+                        json.dump({"chunks": phonetic_chunks}, f, ensure_ascii=False, indent=2)
+                else:
+                    phonetic_chunks = enhanced_chunks
+                    print("[Pipeline] Phonetic skipped (user disabled).")
                 
-                translated_chunks = synchronize_translation_for_tts(phonetic_chunks, model=model)
+                if use_sync:
+                    translated_chunks = synchronize_translation_for_tts(phonetic_chunks, model=model)
+                else:
+                    translated_chunks = phonetic_chunks
+                    print("[Pipeline] Sync skipped (user disabled).")
             else:
                 translated_chunks = raw_translated_chunks
             
@@ -622,6 +638,10 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, t
             }
             with open(final_json_path, "w", encoding="utf-8") as f:
                 json.dump(translated_data, f, ensure_ascii=False, indent=2)
+            
+            # Unload Ollama model after all translation steps are complete
+            from translator import unload_model
+            unload_model(model)
                 
         step_times["3_translation_and_enhancement"] = time.time() - t0
             
@@ -661,6 +681,49 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, t
         if speaker == "cloned_speaker":
             # Extract 1 minute sample from clean vocals wav instead of noisy original audio
             prepare_cloned_voice(vocals_wav_path, orig_json_path)
+
+        # Extract ref_text from whisper transcription for OmniVoice voice cloning
+        ref_text = None
+        if speaker == "cloned_speaker" and tts_model and "omnivoice" in tts_model.lower():
+            ref_es_path = os.path.join(tts_dir, "ref_es_bridge.wav")
+            ref_es_text_path = os.path.join(output_dir, "ref_es_text.txt")
+
+            if os.path.exists(ref_es_path) and os.path.exists(ref_es_text_path):
+                with open(ref_es_text_path, 'r', encoding='utf-8') as f:
+                    ref_text = f.read().strip()
+                print(f"[OmniVoice Bridge] Using cached ref_es_bridge.wav")
+            else:
+                first_chunk_text = translated_chunks[0].get("text", "").strip() if translated_chunks else ""
+                if first_chunk_text:
+                    print("[OmniVoice Bridge] Starting VoxCPM2 to generate Spanish reference...")
+                    from whisper_client import wsl_to_windows_path
+                    from tts_client import start_tts_server, stop_tts_server
+                    import requests as req_http
+
+                    voxcpm_proc = start_tts_server(model_name_or_path="openbmb/VoxCPM2", port=8020, engine="voxcpm")
+                    try:
+                        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                        cloned_wav = os.path.join(base_dir, "backend", "cloned_speaker.wav")
+                        r = req_http.post("http://127.0.0.1:8020/api/tts", json={
+                            "text": first_chunk_text,
+                            "speaker": "cloned_speaker",
+                            "output_path": wsl_to_windows_path(ref_es_path),
+                            "cfg_value": 2.0,
+                            "inference_timesteps": 10,
+                            "reference_wav_path": wsl_to_windows_path(cloned_wav),
+                            "normalize": False
+                        }, timeout=300)
+                        if r.status_code == 200:
+                            with open(ref_es_text_path, 'w', encoding='utf-8') as f:
+                                f.write(first_chunk_text)
+                            ref_text = first_chunk_text
+                            print(f"[OmniVoice Bridge] Generated ref_es_bridge.wav ({first_chunk_text[:60]}...)")
+                        else:
+                            print(f"[OmniVoice Bridge] VoxCPM2 returned {r.status_code}: {r.text[:200]}")
+                    finally:
+                        stop_tts_server(voxcpm_proc, port=8020)
+                else:
+                    print("[OmniVoice Bridge] No translated text available for bridge.")
 
         from audio_processor import get_flat_timestamp
         if tts_mode == "oneshot":
@@ -723,7 +786,9 @@ def process_translation_task(task_id: str, url: str, model: str, speaker: str, t
             task_id=task_id,
              tts_model=tts_model,
             tts_cfg=tts_cfg,
-            tts_steps=tts_steps
+            tts_steps=tts_steps,
+            target_language=target_language,
+            ref_text=ref_text
         )
         step_times["4_tts_synthesis"] = time.time() - t0
         
@@ -1008,7 +1073,10 @@ def process_video(request: ProcessRequest, background_tasks: BackgroundTasks):
         request.batch_size,
         request.sync_size,
         request.source_language,
-        request.target_language
+        request.target_language,
+        request.use_enhance,
+        request.use_phonetic,
+        request.use_sync
     )
     return {"task_id": task_id}
 
@@ -1451,6 +1519,14 @@ def reprocess_studio_block(task_id: str, req: ReprocessRequest):
     tts_dir = os.path.join(CACHE_DIR, task_id, "tts")
     os.makedirs(tts_dir, exist_ok=True)
     
+    # Read target_language from task metadata
+    task_meta_path = os.path.join(CACHE_DIR, task_id, "task_meta.json")
+    target_language = "Spanish"
+    if os.path.exists(task_meta_path):
+        with open(task_meta_path, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+            target_language = meta.get("target_language", "Spanish")
+    
     # 1. Update latest JSON script (single phrase only)
     enhanced_json = get_latest_script_path(task_id)
     if not enhanced_json:
@@ -1494,9 +1570,20 @@ def reprocess_studio_block(task_id: str, req: ReprocessRequest):
     temp_ref_wav = os.path.join(temp_tts_dir, "ref_0.wav")
     if os.path.exists(ref_wav):
         shutil.copy2(ref_wav, temp_ref_wav)
-        
+
+    # OmniVoice bridge support for Studio reprocess
+    ref_text = None
+    ref_es_text_path = os.path.join(CACHE_DIR, task_id, "ref_es_text.txt")
+    ref_es_bridge_path = os.path.join(CACHE_DIR, task_id, "tts", "ref_es_bridge.wav")
+    if os.path.exists(ref_es_text_path) and os.path.exists(ref_es_bridge_path):
+        with open(ref_es_text_path, 'r', encoding='utf-8') as f:
+            ref_text = f.read().strip()
+        temp_bridge = os.path.join(temp_tts_dir, "ref_es_bridge.wav")
+        shutil.copy2(ref_es_bridge_path, temp_bridge)
+        print(f"[Studio OmniVoice] Bridge ref loaded: {ref_text[:60]}...")
+
     dummy_chunks = [{"text": req.text, "timestamp": [start_time, end_time]}]
-    
+
     try:
         generated_paths = generate_individual_tts(
             chunks=dummy_chunks,
@@ -1505,7 +1592,9 @@ def reprocess_studio_block(task_id: str, req: ReprocessRequest):
             task_id=task_id,
             tts_model=req.tts_model,
             tts_cfg=req.tts_cfg,
-            tts_steps=req.tts_steps
+            tts_steps=req.tts_steps,
+            target_language=target_language,
+            ref_text=ref_text
         )
         
         if not generated_paths or not os.path.exists(generated_paths[0]):
@@ -1531,6 +1620,11 @@ class RetranscribeRequest(BaseModel):
     end_phrase_index: int
     source_language: str = "English"
     whisper_model: str = "large-v3-turbo"
+
+class FinalizeRequest(BaseModel):
+    use_enhance: bool = True
+    use_phonetic: bool = True
+    use_sync: bool = True
 
 class TranslateRequest(BaseModel):
     phrase_index: int
@@ -1869,7 +1963,7 @@ def delete_studio_phrase(task_id: str, phrase_index: int):
     }
 
 @app.post("/api/studio/{task_id}/finalize")
-def finalize_studio_video(task_id: str, background_tasks: BackgroundTasks):
+def finalize_studio_video(task_id: str, background_tasks: BackgroundTasks, req: FinalizeRequest = FinalizeRequest()):
     """Clears old output and triggers full render pipeline directly."""
     output_video = os.path.join(CACHE_DIR, task_id, "video_dubbed.mp4")
     verification_report = os.path.join(CACHE_DIR, task_id, "whisper", "verification_report.json")
@@ -1878,7 +1972,7 @@ def finalize_studio_video(task_id: str, background_tasks: BackgroundTasks):
         try:
             os.remove(output_video)
         except PermissionError:
-            pass  # File in use by streaming, will be overwritten by new render
+            pass
     if os.path.exists(verification_report):
         try:
             os.remove(verification_report)
@@ -1895,6 +1989,13 @@ def finalize_studio_video(task_id: str, background_tasks: BackgroundTasks):
         except:
             pass
     
+    # Override with user-selected flags from the studio
+    meta["use_enhance"] = req.use_enhance
+    meta["use_phonetic"] = req.use_phonetic
+    meta["use_sync"] = req.use_sync
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+    
     # Extract parameters with defaults
     model = meta.get("model", "gemma4:e2b-it-qat")
     speaker = meta.get("speaker", "en-Frank_man")
@@ -1907,6 +2008,9 @@ def finalize_studio_video(task_id: str, background_tasks: BackgroundTasks):
     sync_size = meta.get("sync_size", 1)
     source_language = meta.get("source_language", "English")
     target_language = meta.get("target_language", "Spanish")
+    use_enhance = meta.get("use_enhance", True)
+    use_phonetic = meta.get("use_phonetic", True)
+    use_sync = meta.get("use_sync", True)
     
     # Initialize task status
     remove_cancelled_task(task_id)
@@ -1932,7 +2036,10 @@ def finalize_studio_video(task_id: str, background_tasks: BackgroundTasks):
         batch_size,
         sync_size,
         source_language,
-        target_language
+        target_language,
+        use_enhance,
+        use_phonetic,
+        use_sync
     )
     
     return {"status": "ok", "task_id": task_id, "message": "Ensamblando video..."}

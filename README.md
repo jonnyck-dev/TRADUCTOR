@@ -1,6 +1,6 @@
-# JANUS Dubber / AI Fine Editor (v4.1)
+# JANUS Dubber / JANUS Editor (v4.2)
 
-Aplicación web local para **traducir, doblar y editar** videos desde y hacia **9 idiomas**. Combina transcripción (WhisperX), traducción local (Ollama), síntesis de voz (Edge TTS / VibeVoice / VoxCPM / Windows Native) y edición no-lineal en un estudio interactivo, optimizado para Windows/WSL con GPUs NVIDIA.
+Aplicación web local para **traducir, doblar y editar** videos desde y hacia **9 idiomas**. Combina transcripción (WhisperX), traducción local (Ollama), síntesis de voz (OmniVoice / Edge TTS / VibeVoice / VoxCPM / Windows Native) y edición no-lineal en un estudio interactivo, optimizado para Windows/WSL con GPUs NVIDIA.
 
 ---
 
@@ -8,9 +8,27 @@ Aplicación web local para **traducir, doblar y editar** videos desde y hacia **
 
 ```
 YouTube / Local → Demucs (separación voz/fondo) → WhisperX (transcripción + timestamps por palabra)
-→ Ollama (traducción one-shot) → Sanador IA (limpieza + puntuación) → Sincronización temporal
-→ TTS (Edge TTS / VibeVoice / VoxCPM / Windows Native) → Mezcla con fondo → Fusión con video → QA (verificación WhisperX)
+→ Ollama (traducción one-shot) → IAs de Post-Procesamiento (opcionales) → Sincronización temporal
+→ TTS (OmniVoice / Edge TTS / VibeVoice / VoxCPM / Windows Native) → Mezcla con fondo → Fusión con video → QA (verificación WhisperX)
 ```
+
+### IAs de Post-Procesamiento (controlables por checkbox)
+
+| IA | Función | Default |
+|---|---|---|
+| **Sanador IA** | Limpia repeticiones, corrige errores de traducción, agrega puntuación emocional | ✅ On |
+| **Fonética IA** | Convierte números y acrónimos a pronunciación española (necesaria para VoxCPM/VibeVoice, auto-off para OmniVoice/Edge) | ✅ On |
+| **Reductor IA** | Acorta frases que exceden el tiempo disponible del video | ✅ On |
+
+### OmniVoice — Voice Cloning (600+ idiomas)
+
+```
+Cloned Speaker (10s inglés) → Puente VoxCPM2 (1 frase, ~53s one-time)
+  → ref_es_bridge.wav (español con la voz clonada)
+  → OmniVoice genera todas las frases en español nativo (~6x tiempo real)
+```
+
+Parámetros recomendados: CFG=2.0, Steps=16 (se auto-configuran al seleccionar OmniVoice).
 
 ### Idiomas Soportados
 
@@ -118,21 +136,29 @@ Servidor en **http://localhost:8000** | Studio en **http://localhost:8000/studio
 
 ---
 
+## Motores TTS
+
+| Motor | Tipo | Parámetros | Voz Clonada | Notas |
+|-------|------|------------|-------------|-------|
+| **OmniVoice** | Local (GPU) | 0.6B | ✅ | 600+ idiomas, RTF 0.025, 3 workers paralelos |
+| **VoxCPM2** | Local (GPU) | 2.0B | ✅ | Alta fidelidad, 1 worker |
+| **VibeVoice 1.5B** | Local (GPU) | 1.5B | ❌ | Standard, 1 worker |
+| **VibeVoice 0.5B** | Local (GPU) | 0.5B | ❌ | Streaming, 3 workers paralelos |
+| **Edge TTS** | Online | — | ❌ | Sin GPU, 300+ voces neurales Microsoft |
+| **Windows Native** | Local | — | ❌ | Velocidad inmediata, sin GPU |
+
+---
+
 ## Notas técnicas
 
-- **VRAM**: Los servidores TTS se levantan y destruyen dinámicamente.
+- **VRAM**: Los servidores TTS se levantan y destruyen dinámicamente. OmniVoice y VoxCPM2 comparten el mismo entorno virtual.
 - **WSL**: El backend detecta `os.name` y usa `wsl_to_windows_path()` automáticamente.
-- **Caché idempotente**: Cada etapa guarda resultados en `cache/{task_id}/`; si se interrumpe, retoma desde el último paso.
+- **Caché idempotente**: Cada etapa guarda resultados en `cache/{task_id}/`; si se interrumpe, retoma desde el último paso. El bridge VoxCPM2 → OmniVoice se cachea como `ref_es_bridge.wav`.
 - **FFmpeg portable**: El setup descarga FFmpeg automáticamente en `backend/bin/`.
 - **CJK Smart Merge**: Los chunks cortos en japonés, chino y coreano se fusionan por caracteres (no por palabras).
 - **Modelos de alineación**: Los modelos wav2vec2 para ja/zh/ko se guardan en `backend/whisperx_models/align/` (no dependen de HF cache).
 - **Parámetro jerárquico**: Los selectores del Studio heredan los valores del Home al abrirse (papá → hijo).
+- **Auto-configuración TTS**: Al seleccionar OmniVoice → CFG=2.0, Steps=16. VoxCPM2 → CFG=2.0, Steps=10. Fonética IA se desactiva automáticamente para OmniVoice y Edge TTS.
+- **Documentación interna**: Los archivos de planificación, bugs y arquitectura están en `documentacion/` (no trackeados en git).
 
 ---
-
-## Planes
-
-| Documento | Propósito |
-|-----------|-----------|
-| `frontend_landing_separation_plan.md` | Separar frontend del backend e integrarlo en janus-landing (Vercel) |
-| `editor/studio_dubber_separation_plan.md` | Separar estado del Studio y del Dubber en frontend y backend |

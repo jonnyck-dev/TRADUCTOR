@@ -88,7 +88,7 @@ fi
 echo ""
 echo "[3/5] Creating subproject venvs..."
 
-# VoxCPM venv
+# VoxCPM venv (shared with OmniVoice)
 if [ ! -f "backend/VoxCPM/env_voxcpm/bin/python" ]; then
     echo "  - Creating VoxCPM venv..."
     cd backend/VoxCPM
@@ -96,12 +96,25 @@ if [ ! -f "backend/VoxCPM/env_voxcpm/bin/python" ]; then
     source env_voxcpm/bin/activate
     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 --quiet 2>/dev/null || \
         pip install torch torchvision torchaudio --quiet
-    pip install fastapi uvicorn requests pydantic soundfile huggingface_hub --quiet
+    pip install fastapi uvicorn requests pydantic soundfile huggingface_hub accelerate --quiet
     deactivate
     cd ../..
     echo "[OK] VoxCPM configured."
 else
     echo "  - VoxCPM venv already exists. Skipping."
+fi
+
+# OmniVoice (install in shared VoxCPM env)
+if [ -f "backend/OmniVoice/pyproject.toml" ]; then
+    echo "  - Installing OmniVoice in env_voxcpm..."
+    cd backend/VoxCPM
+    source env_voxcpm/bin/activate
+    pip install -e ../OmniVoice --quiet
+    deactivate
+    cd ../..
+    echo "[OK] OmniVoice configured."
+else
+    echo "  - [SKIP] OmniVoice not found in backend/OmniVoice"
 fi
 
 # VibeVoice venv
