@@ -71,6 +71,14 @@ if not exist "backend\demucs\.git" (
     echo   - Demucs ya existe. Saltando clone.
 )
 
+:: OmniVoice (k2-fsa, multi-language TTS)
+if not exist "backend\OmniVoice\.github" (
+    echo   - Clonando OmniVoice...
+    git clone https://github.com/k2-fsa/OmniVoice.git backend\OmniVoice --depth 1
+) else (
+    echo   - OmniVoice ya existe. Saltando clone.
+)
+
 :: 3. Create subproject venvs
 echo.
 echo [3/5] Creando entornos virtuales de subproyectos...

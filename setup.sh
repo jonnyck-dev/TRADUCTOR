@@ -84,6 +84,14 @@ else
     echo "  - Demucs already exists. Skipping."
 fi
 
+# OmniVoice (k2-fsa, multi-language TTS)
+if [ ! -d "backend/OmniVoice/.github" ]; then
+    echo "  - Cloning OmniVoice..."
+    git clone https://github.com/k2-fsa/OmniVoice.git backend/OmniVoice --depth 1
+else
+    echo "  - OmniVoice already exists. Skipping."
+fi
+
 # 3. Create subproject venvs
 echo ""
 echo "[3/5] Creating subproject venvs..."

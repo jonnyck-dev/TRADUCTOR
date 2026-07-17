@@ -162,3 +162,14 @@ Servidor en **http://localhost:8000** | Studio en **http://localhost:8000/studio
 - **Documentación interna**: Los archivos de planificación, bugs y arquitectura están en `documentacion/` (no trackeados en git).
 
 ---
+
+## Repositorios Externos
+
+| Proyecto | URL |
+|----------|-----|
+| OmniVoice | <https://github.com/k2-fsa/OmniVoice> |
+| VoxCPM | <https://github.com/OpenBMB/VoxCPM> |
+| VibeVoice | <https://github.com/vibevoice-community/VibeVoice> |
+| Demucs (UVR5-UI) | <https://github.com/Eddycrack864/UVR5-UI> |
+
+---
